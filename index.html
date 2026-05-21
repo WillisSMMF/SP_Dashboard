@@ -3,371 +3,409 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mantis Bug Tracker Dashboard | Product Support</title>
-  <meta name="description" content="Dashboard interaktif tim Product Support." />
+  <title>SMF Dashboard — Monitoring Tiket</title>
+  <meta name="description" content="Dashboard interaktif monitoring tiket SMF: Overview KPI, Cabang, Edit Data, SLA, dan Tabel Tiket lengkap." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Sidebar -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-      <div class="logo">
-        <div class="logo-icon">🐞</div>
-        <div class="logo-text">
-          <span class="logo-title">Product Support</span>
-          <span class="logo-sub">Dashboard</span>
-        </div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">
+      <div class="logo-icon">SMF</div>
+      <div class="logo-text">
+        <span class="logo-title">SMF Monitor</span>
+        <span class="logo-sub">Ticket Dashboard</span>
       </div>
-      <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">‹</button>
     </div>
+  </div>
 
-    <nav class="sidebar-nav">
-      <a href="#overview" class="nav-item active" data-section="overview" id="nav-overview">
-        <span class="nav-icon">📊</span>
-        <span class="nav-label">Overview</span>
-      </a>
-      <a href="#tickets" class="nav-item" data-section="tickets" id="nav-tickets">
-        <span class="nav-icon">🎫</span>
-        <span class="nav-label">Tiket</span>
-      </a>
-      <a href="#sla" class="nav-item" data-section="sla" id="nav-sla">
-        <span class="nav-icon">⏱️</span>
-        <span class="nav-label">SLA</span>
-      </a>
-      <a href="#branch" class="nav-item" data-section="branch" id="nav-branch">
-        <span class="nav-icon">🗺️</span>
-        <span class="nav-label">Cabang</span>
-      </a>
-    </nav>
+  <nav class="nav">
+    <a href="#" class="nav-item active" data-section="overview" id="nav-overview">
+      <span class="nav-icon">📊</span>
+      <span class="nav-label">Overview</span>
+    </a>
+    <a href="#" class="nav-item" data-section="cabang" id="nav-cabang">
+      <span class="nav-icon">🗺️</span>
+      <span class="nav-label">Cabang</span>
+    </a>
+    <a href="#" class="nav-item" data-section="editdata" id="nav-editdata">
+      <span class="nav-icon">✏️</span>
+      <span class="nav-label">Edit Data</span>
+    </a>
+    <a href="#" class="nav-item" data-section="sla" id="nav-sla">
+      <span class="nav-icon">⏱️</span>
+      <span class="nav-label">SLA</span>
+    </a>
+    <a href="#" class="nav-item" data-section="tiket" id="nav-tiket">
+      <span class="nav-icon">🎫</span>
+      <span class="nav-label">Tiket</span>
+    </a>
+  </nav>
 
-    <div class="sidebar-footer">
-      <div class="data-source">
-        <span class="ds-icon">🔗</span>
-        <div class="ds-info">
-          <span class="ds-label">Data Source</span>
-          <span class="ds-val">Google Sheets</span>
-        </div>
-      </div>
-      <div class="last-update" id="lastUpdate">Memuat...</div>
+  <div class="sidebar-footer">
+    <div class="last-update" id="last-update-sidebar">
+      <span class="update-dot"></span>
+      <span id="last-update-text">Memuat...</span>
     </div>
-  </aside>
+    <button class="refresh-btn" id="refresh-btn" title="Refresh data">
+      <span class="refresh-icon">↻</span> Refresh
+    </button>
+  </div>
+</aside>
 
-  <!-- Main Content -->
-  <main class="main" id="main">
-    <!-- Top Bar -->
-    <header class="topbar">
-      <div class="topbar-left">
-        <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
-        <div class="breadcrumb">
-          <span class="breadcrumb-icon">📊</span>
-          <span id="currentPageTitle">Overview</span>
-        </div>
-      </div>
-      <div class="topbar-right">
+<!-- MAIN CONTENT -->
+<div class="main-wrapper">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1 class="page-title" id="page-title">Overview</h1>
+      <span class="page-sub" id="page-sub">KPI & Tren Bulanan</span>
+    </div>
+    <div class="topbar-right">
+      <div class="filter-bar" id="filter-bar">
         <div class="filter-group">
-          <label for="filterMonth">Bulan:</label>
-          <select id="filterMonth" class="filter-select">
-            <option value="">Semua</option>
-          </select>
+          <label class="filter-label">Bulan</label>
+          <div class="multi-select-wrapper" id="filter-bulan-wrapper">
+            <button class="multi-select-btn" id="btn-filter-bulan">Semua <span class="arrow">▾</span></button>
+            <div class="multi-select-dropdown" id="dropdown-bulan"></div>
+          </div>
         </div>
         <div class="filter-group">
-          <label for="filterProduct">Produk:</label>
-          <select id="filterProduct" class="filter-select">
-            <option value="">Semua</option>
-          </select>
+          <label class="filter-label">Cabang</label>
+          <div class="multi-select-wrapper" id="filter-cabang-wrapper">
+            <button class="multi-select-btn" id="btn-filter-cabang">Semua <span class="arrow">▾</span></button>
+            <div class="multi-select-dropdown" id="dropdown-cabang"></div>
+          </div>
         </div>
-        <button class="refresh-btn" id="refreshBtn" title="Refresh Data">
-          <span class="refresh-icon">↻</span>
-          <span>Refresh</span>
-        </button>
+        <div class="filter-group">
+          <label class="filter-label">Produk</label>
+          <div class="multi-select-wrapper" id="filter-produk-wrapper">
+            <button class="multi-select-btn" id="btn-filter-produk">Semua <span class="arrow">▾</span></button>
+            <div class="multi-select-dropdown" id="dropdown-produk"></div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Kategori Status</label>
+          <div class="multi-select-wrapper" id="filter-kategori-wrapper">
+            <button class="multi-select-btn" id="btn-filter-kategori">Semua <span class="arrow">▾</span></button>
+            <div class="multi-select-dropdown" id="dropdown-kategori"></div>
+          </div>
+        </div>
+        <button class="reset-btn" id="reset-filters">✕ Reset</button>
       </div>
-    </header>
-
-    <!-- Loading State -->
-    <div class="loading-overlay" id="loadingOverlay">
-      <div class="loading-spinner"></div>
-      <p class="loading-text">Memuat data dari Google Sheets...</p>
     </div>
+  </header>
 
-    <!-- Content Area -->
-    <div class="content" id="content">
+  <!-- LOADING OVERLAY -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p class="loading-text">Memuat data dari Google Sheets...</p>
+  </div>
 
-      <!-- ===== SECTION: OVERVIEW ===== -->
-      <section class="section active" id="section-overview">
-        <div class="section-header">
-          <h1 class="section-title">Overview Dashboard</h1>
-          <p class="section-subtitle">Ringkasan performa tiket Product Support</p>
+  <!-- CONTENT SECTIONS -->
+  <main class="content">
+
+    <!-- ====== OVERVIEW SECTION ====== -->
+    <section class="section active" id="section-overview">
+      <div class="kpi-grid">
+        <div class="kpi-card" id="kpi-total">
+          <div class="kpi-icon">📋</div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpi-total-val">—</div>
+            <div class="kpi-label">Total Tiket</div>
+          </div>
+          <div class="kpi-badge badge-blue">ALL</div>
         </div>
-
-        <!-- KPI Cards -->
-        <div class="kpi-grid" id="kpiGrid">
-          <div class="kpi-card" id="kpi-total">
-            <div class="kpi-icon">🎫</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="kpiTotal">-</div>
-              <div class="kpi-label">Total Tiket</div>
-            </div>
-            <div class="kpi-trend" id="kpiTotalTrend"></div>
+        <div class="kpi-card" id="kpi-selesai">
+          <div class="kpi-icon">✅</div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpi-selesai-val">—</div>
+            <div class="kpi-label">Resolved</div>
           </div>
-          <div class="kpi-card kpi-resolved" id="kpi-resolved">
-            <div class="kpi-icon">✅</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="kpiResolved">-</div>
-              <div class="kpi-label">Resolved</div>
-            </div>
-            <div class="kpi-badge" id="kpiResolvedPct"></div>
-          </div>
-          <div class="kpi-card kpi-open" id="kpi-open">
-            <div class="kpi-icon">🔓</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="kpiOpen">-</div>
-              <div class="kpi-label">Open / On Progress</div>
-            </div>
-            <div class="kpi-badge" id="kpiOpenPct"></div>
-          </div>
-          <div class="kpi-card kpi-sla" id="kpi-sla">
-            <div class="kpi-icon">⚡</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="kpiSla">-</div>
-              <div class="kpi-label">Avg SLA (hari)</div>
-            </div>
-            <div class="kpi-badge" id="kpiSlaLabel"></div>
-          </div>
+          <div class="kpi-badge badge-green">DONE</div>
         </div>
-
-        <!-- Charts Row 1 -->
-        <div class="charts-row">
-          <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Tren Tiket per Bulan</h3>
-              <div class="chart-legend-custom" id="trendLegend"></div>
-            </div>
-            <div class="chart-body">
-              <canvas id="trendChart"></canvas>
-            </div>
+        <div class="kpi-card" id="kpi-open">
+          <div class="kpi-icon">🔓</div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpi-open-val">—</div>
+            <div class="kpi-label">Open / Process</div>
           </div>
-          <div class="chart-card chart-sm">
-            <div class="chart-header">
-              <h3>Status Tiket</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="statusChart"></canvas>
-            </div>
+          <div class="kpi-badge badge-orange">OPEN</div>
+        </div>
+        <div class="kpi-card" id="kpi-sla">
+          <div class="kpi-icon">⏱️</div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpi-sla-val">—</div>
+            <div class="kpi-label">Avg SLA (hari)</div>
+          </div>
+          <div class="kpi-badge badge-purple">SLA</div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card wide">
+          <div class="chart-header">
+            <span class="chart-title">📈 Tren Tiket per Bulan</span>
+          </div>
+          <div class="chart-body">
+            <canvas id="chart-tren-bulan"></canvas>
           </div>
         </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">🍩 Distribusi Status</span>
+          </div>
+          <div class="chart-body chart-donut-body">
+            <canvas id="chart-status-donut"></canvas>
+          </div>
+        </div>
+      </div>
 
-        <!-- Charts Row 2 -->
-        <div class="charts-row">
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>Top Kategori</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="categoryChart"></canvas>
-            </div>
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">🏷️ Top Kategori Produk</span>
           </div>
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>Distribusi Root Cause</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="rootCauseChart"></canvas>
-            </div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>Per Produk</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="productChart"></canvas>
-            </div>
+          <div class="chart-body">
+            <canvas id="chart-top-kategori"></canvas>
           </div>
         </div>
-      </section>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">🔍 Root Cause (Status Group)</span>
+          </div>
+          <div class="chart-body">
+            <canvas id="chart-root-cause"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">📦 Per Produk</span>
+          </div>
+          <div class="chart-body">
+            <canvas id="chart-per-produk"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
 
-      <!-- ===== SECTION: TICKETS ===== -->
-      <section class="section" id="section-tickets">
-        <div class="section-header">
-          <h1 class="section-title">Daftar Tiket</h1>
-          <p class="section-subtitle">Tabel lengkap semua tiket Product Support</p>
-        </div>
-        <div class="table-toolbar">
-          <div class="search-wrap">
-            <span class="search-icon">🔍</span>
-            <input type="text" id="tableSearch" placeholder="Cari tiket, summary, branch..." class="search-input" />
+    <!-- ====== CABANG SECTION ====== -->
+    <section class="section" id="section-cabang">
+      <div class="charts-row">
+        <div class="chart-card wide">
+          <div class="chart-header">
+            <span class="chart-title">🏆 Top 20 Cabang (Volume Tiket)</span>
           </div>
-          <div class="filter-group">
-            <select id="tableStatus" class="filter-select">
-              <option value="">Semua Status</option>
-              <option value="resolved">Resolved</option>
-              <option value="assigned">Assigned</option>
-              <option value="acknowledged">Acknowledged</option>
-              <option value="feedback">Feedback</option>
-            </select>
+          <div class="chart-body chart-tall">
+            <canvas id="chart-top-cabang"></canvas>
           </div>
-          <div class="filter-group">
-            <select id="tableRootCause" class="filter-select">
-              <option value="">Semua Root Cause</option>
-              <option value="System">System</option>
-              <option value="People">People</option>
-              <option value="Process">Process</option>
-            </select>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">📊 Status Stacked per Cabang (Top 10)</span>
           </div>
-          <div class="table-count" id="tableCount">-</div>
+          <div class="chart-body chart-tall">
+            <canvas id="chart-cabang-stacked"></canvas>
+          </div>
         </div>
-        <div class="table-container">
-          <table class="data-table" id="ticketTable">
-            <thead>
-              <tr>
-                <th class="sortable" data-col="Id">ID <span class="sort-icon">↕</span></th>
-                <th class="sortable" data-col="Date Submitted">Tanggal <span class="sort-icon">↕</span></th>
-                <th>Summary</th>
-                <th>Kategori</th>
-                <th>Produk</th>
-                <th class="sortable" data-col="Status">Status <span class="sort-icon">↕</span></th>
-                <th>Root Cause</th>
-                <th>SLA</th>
-                <th>Cabang</th>
-              </tr>
-            </thead>
-            <tbody id="ticketTableBody">
-            </tbody>
-          </table>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">📂 Breakdown Kategori per Cabang (Top 10)</span>
+          </div>
+          <div class="chart-body chart-tall">
+            <canvas id="chart-cabang-kategori"></canvas>
+          </div>
         </div>
-        <div class="pagination" id="pagination"></div>
-      </section>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">🔍 Root Cause per Cabang (Top 10)</span>
+          </div>
+          <div class="chart-body chart-tall">
+            <canvas id="chart-cabang-rootcause"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
 
-      <!-- ===== SECTION: SLA ===== -->
-      <section class="section" id="section-sla">
-        <div class="section-header">
-          <h1 class="section-title">Analisis SLA</h1>
-          <p class="section-subtitle">Monitoring Service Level Agreement penyelesaian tiket</p>
-        </div>
-
-        <div class="kpi-grid">
-          <div class="kpi-card">
-            <div class="kpi-icon">✅</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="slaMet">-</div>
-              <div class="kpi-label">SLA ≤ 1 hari</div>
-            </div>
-          </div>
-          <div class="kpi-card kpi-open">
-            <div class="kpi-icon">⚠️</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="slaWarning">-</div>
-              <div class="kpi-label">SLA 2-3 hari</div>
-            </div>
-          </div>
-          <div class="kpi-card" style="--kpi-color: #ef4444">
-            <div class="kpi-icon">🚨</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="slaBreached">-</div>
-              <div class="kpi-label">SLA &gt; 3 hari</div>
-            </div>
-          </div>
-          <div class="kpi-card kpi-sla">
-            <div class="kpi-icon">📈</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="slaOnProgress">-</div>
-              <div class="kpi-label">On Progress</div>
-            </div>
+    <!-- ====== EDIT DATA SECTION ====== -->
+    <section class="section" id="section-editdata">
+      <div class="editdata-info">
+        <div class="info-card">
+          <span class="info-icon">✏️</span>
+          <div>
+            <strong>Edit Data</strong> — Permintaan edit data berdasarkan <em>Tag (Purchase Purpose)</em>, cabang asal, dan frekuensi harian.
           </div>
         </div>
-
-        <div class="charts-row">
-          <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Distribusi SLA (hari penyelesaian)</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="slaDistChart"></canvas>
-            </div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card wide">
+          <div class="chart-header">
+            <span class="chart-title">📅 Frekuensi Edit Data Harian (Tren)</span>
           </div>
-          <div class="chart-card chart-sm">
-            <div class="chart-header">
-              <h3>SLA per Bulan (avg hari)</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="slaMonthChart"></canvas>
-            </div>
+          <div class="chart-body">
+            <canvas id="chart-editdata-harian"></canvas>
           </div>
         </div>
-
-        <div class="charts-row">
-          <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Top 15 Assignee berdasarkan Rata-rata SLA</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="slaAssigneeChart"></canvas>
-            </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">🏷️ Jenis Edit Data (Tag)</span>
           </div>
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>SLA per Produk</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="slaProductChart"></canvas>
-            </div>
+          <div class="chart-body">
+            <canvas id="chart-editdata-tag"></canvas>
           </div>
         </div>
-      </section>
-
-      <!-- ===== SECTION: BRANCH ===== -->
-      <section class="section" id="section-branch">
-        <div class="section-header">
-          <h1 class="section-title">Analisis per Cabang</h1>
-          <p class="section-subtitle">Volume dan performa tiket berdasarkan lokasi cabang</p>
-        </div>
-
-        <div class="charts-row">
-          <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Top 20 Cabang Paling Banyak Tiket</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="branchBarChart"></canvas>
-            </div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card wide">
+          <div class="chart-header">
+            <span class="chart-title">🗺️ Edit Data per Cabang (Top 20)</span>
           </div>
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>Status Tiket per Cabang (Top 10)</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="branchStatusChart"></canvas>
-            </div>
+          <div class="chart-body chart-tall">
+            <canvas id="chart-editdata-cabang"></canvas>
           </div>
         </div>
-
-        <div class="charts-row">
-          <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Breakdown Kategori per Cabang (Top 10)</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="branchCatChart"></canvas>
-            </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">📋 Detail Edit Data</span>
           </div>
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>Root Cause per Cabang (Top 10)</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="branchRcChart"></canvas>
-            </div>
+          <div class="chart-body editdata-table-wrapper">
+            <table class="editdata-table" id="editdata-table">
+              <thead>
+                <tr>
+                  <th>Tag / Produk</th>
+                  <th>Cabang</th>
+                  <th>Jumlah</th>
+                </tr>
+              </thead>
+              <tbody id="editdata-tbody"></tbody>
+            </table>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
 
-    </div><!-- end content -->
+    <!-- ====== SLA SECTION ====== -->
+    <section class="section" id="section-sla">
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon">🟢</div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="sla-le1-val">—</div>
+            <div class="kpi-label">SLA ≤ 1 hari</div>
+          </div>
+          <div class="kpi-badge badge-green">CEPAT</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">🟡</div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="sla-2-3-val">—</div>
+            <div class="kpi-label">SLA 2–3 hari</div>
+          </div>
+          <div class="kpi-badge badge-orange">NORMAL</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">🔴</div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="sla-gt3-val">—</div>
+            <div class="kpi-label">SLA > 3 hari</div>
+          </div>
+          <div class="kpi-badge badge-red">LAMBAT</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">📊</div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="sla-avg-val">—</div>
+            <div class="kpi-label">Avg SLA Overall</div>
+          </div>
+          <div class="kpi-badge badge-purple">AVG</div>
+        </div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">🍩 Distribusi SLA</span>
+          </div>
+          <div class="chart-body chart-donut-body">
+            <canvas id="chart-sla-donut"></canvas>
+          </div>
+        </div>
+        <div class="chart-card wide">
+          <div class="chart-header">
+            <span class="chart-title">📈 Avg SLA per Bulan</span>
+          </div>
+          <div class="chart-body">
+            <canvas id="chart-sla-bulan"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">👤 Avg SLA per Produk</span>
+          </div>
+          <div class="chart-body chart-tall">
+            <canvas id="chart-sla-produk"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">📦 Avg SLA per Status Group</span>
+          </div>
+          <div class="chart-body chart-tall">
+            <canvas id="chart-sla-statusgroup"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== TIKET SECTION ====== -->
+    <section class="section" id="section-tiket">
+      <div class="tiket-controls">
+        <div class="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="tiket-search" class="search-input" placeholder="Cari nomor tiket, nama, cabang..." />
+        </div>
+        <select id="tiket-filter-status" class="tiket-select">
+          <option value="">— Semua Status —</option>
+        </select>
+        <select id="tiket-filter-rootcause" class="tiket-select">
+          <option value="">— Semua Root Cause —</option>
+        </select>
+        <span class="tiket-count" id="tiket-count">0 tiket</span>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="data-table" id="tiket-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-col="orderNum">No. Tiket <span class="sort-arrow">↕</span></th>
+              <th class="sortable" data-col="branch">Cabang <span class="sort-arrow">↕</span></th>
+              <th class="sortable" data-col="custName">Nasabah <span class="sort-arrow">↕</span></th>
+              <th class="sortable" data-col="product">Produk <span class="sort-arrow">↕</span></th>
+              <th class="sortable" data-col="status">Status <span class="sort-arrow">↕</span></th>
+              <th>Root Cause</th>
+              <th class="sortable" data-col="submitDate">Tgl Submit <span class="sort-arrow">↕</span></th>
+              <th class="sortable" data-col="sla">SLA (hari) <span class="sort-arrow">↕</span></th>
+            </tr>
+          </thead>
+          <tbody id="tiket-tbody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </section>
+
   </main>
+</div>
 
-  <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
