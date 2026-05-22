@@ -1,512 +1,143 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mantis Dashboard</title>
-    <!-- Google Fonts & Chart.js / PapaParse via CDN -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Inter', sans-serif;
-        }
-
-        body {
-            background-color: #0f172a;
-            color: #f8fafc;
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
-        }
-
-        /* ===== SIDEBAR ===== */
-        .sidebar {
-            width: 260px;
-            background-color: #1e293b;
-            border-right: 1px solid rgba(255, 255, 255, 0.06);
-            display: flex;
-            flex-direction: column;
-            padding: 24px;
-        }
-
-        .sidebar-brand {
-            font-size: 20px;
-            font-weight: 700;
-            color: #38bdf8;
-            margin-bottom: 32px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .nav-menu {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            list-style: none;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            padding: 12px 16px;
-            color: #94a3b8;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-
-        .nav-item:hover, .nav-item.active {
-            color: #fff;
-            background-color: #334155;
-        }
-
-        .nav-item.active {
-            background-color: #0284c7;
-            color: #fff;
-        }
-
-        /* ===== MAIN CONTENT ===== */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        /* ===== TOP HEADER & FILTERS ===== */
-        .header {
-            background-color: #1e293b;
-            padding: 16px 32px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 16px;
-        }
-
-        .header-title h1 {
-            font-size: 22px;
-            font-weight: 600;
-        }
-
-        .global-filters {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .filter-select {
-            background-color: #0f172a;
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 8px 14px;
-            border-radius: 6px;
-            outline: none;
-            cursor: pointer;
-            font-size: 14px;
-            min-width: 140px;
-        }
-
-        .filter-select:focus {
-            border-color: #38bdf8;
-        }
-
-        .btn-refresh {
-            background-color: #334155;
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 500;
-        }
-
-        .btn-refresh:hover {
-            background-color: #475569;
-        }
-
-        .spinning {
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            100% { transform: rotate(360deg); }
-        }
-
-        .meta-info {
-            font-size: 12px;
-            color: #64748b;
-            margin-top: 4px;
-        }
-
-        /* ===== SECTIONS CONTAINER ===== */
-        .content-body {
-            flex: 1;
-            padding: 32px;
-            overflow-y: auto;
-            background-color: #0f172a;
-        }
-
-        .section {
-            display: none;
-        }
-
-        .section.active {
-            display: block;
-        }
-
-        /* ===== DASHBOARD CARD GRID ===== */
-        .chart-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-            gap: 24px;
-            margin-bottom: 24px;
-        }
-
-        .chart-card {
-            background-color: #1a2235;
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: 12px;
-            padding: 24px;
-            position: relative;
-        }
-
-        .chart-card h4 {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 16px;
-            color: #cbd5e1;
-        }
-
-        .card-header-flex {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-
-        .card-header-flex h4 {
-            margin-bottom: 0;
-        }
-
-        /* ===== TABLE STYLING ===== */
-        .table-container {
-            background-color: #1a2235;
-            border-radius: 12px;
-            padding: 24px;
-            overflow-x: auto;
-            border: 1px solid rgba(255, 255, 255, 0.04);
-        }
-
-        .search-box {
-            background-color: #0f172a;
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 10px 16px;
-            border-radius: 8px;
-            width: 100%;
-            max-width: 300px;
-            margin-bottom: 20px;
-            outline: none;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-        }
-
-        th {
-            background-color: #1e293b;
-            padding: 14px 16px;
-            color: #94a3b8;
-            font-weight: 600;
-            font-size: 14px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        th.sortable {
-            cursor: pointer;
-        }
-
-        th.sortable:hover {
-            color: #fff;
-            background-color: #334155;
-        }
-
-        td {
-            padding: 14px 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-            font-size: 14px;
-            color: #cbd5e1;
-        }
-
-        tr:hover td {
-            background-color: rgba(255, 255, 255, 0.02);
-        }
-
-        /* ===== PAGINATION ===== */
-        .pagination {
-            display: flex;
-            justify-content: flex-end;
-            gap: 6px;
-            margin-top: 20px;
-        }
-
-        .page-btn {
-            background-color: #1e293b;
-            color: #cbd5e1;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-        }
-
-        .page-btn:hover:not([disabled]) {
-            background-color: #334155;
-            color: #fff;
-        }
-
-        .page-btn.active {
-            background-color: #0284c7;
-            color: #fff;
-            border-color: #0284c7;
-        }
-
-        .page-btn[disabled] {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        /* ===== LOADING OVERLAY ===== */
-        .loading-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(15, 23, 42, 0.85);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        .spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #38bdf8;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        /* KPI Cards Grid */
-        .kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 20px;
-            margin-bottom: 24px;
-        }
-        .kpi-card {
-            background-color: #1a2235;
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            padding: 20px;
-            border-radius: 12px;
-        }
-        .kpi-title { font-size: 13px; color: #94a3b8; font-weight: 500; margin-bottom: 6px; }
-        .kpi-value { font-size: 24px; font-weight: 700; color: #fff; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background-color: #0f172a; color: #f8fafc; display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 260px; background-color: #1e293b; display: flex; flex-direction: column; padding: 24px; transition: all 0.3s; }
+        .sidebar.collapsed { width: 70px; padding: 24px 10px; }
+        .sidebar-brand { font-size: 18px; font-weight: 700; color: #38bdf8; margin-bottom: 30px; display: flex; gap: 10px; }
+        .nav-menu { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+        .nav-item { display: block; padding: 12px 16px; color: #94a3b8; text-decoration: none; border-radius: 8px; cursor: pointer; font-weight: 500; }
+        .nav-item:hover, .nav-item.active { color: #fff; background-color: #334155; }
+        .nav-item.active { background-color: #6366f1; }
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .header { background-color: #1e293b; padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .global-filters { display: flex; gap: 12px; align-items: center; }
+        .filter-select, .search-box { background-color: #0f172a; color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 8px 14px; border-radius: 6px; outline: none; }
+        .content-body { flex: 1; padding: 32px; overflow-y: auto; }
+        .section { display: none; }
+        .section.active { display: block; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 24px; }
+        .kpi-card { background-color: #1a2235; padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.03); }
+        .kpi-card h3 { font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+        .kpi-card p { font-size: 24px; font-weight: 700; }
+        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; margin-bottom: 24px; }
+        .chart-card { background-color: #1a2235; padding: 24px; border-radius: 12px; height: 340px; }
+        .chart-card h4 { margin-bottom: 16px; font-size: 15px; color: #cbd5e1; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-open { background: rgba(56,189,248,0.15); color: #38bdf8; }
+        .badge-system { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+        .tag-pill { background: #334155; color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; margin-top: 16px; }
+        th, td { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
+        th { background-color: #1e293b; color: #94a3b8; }
+        .page-btn { background: #1e293b; color: #fff; border: none; padding: 6px 12px; margin: 0 2px; border-radius: 4px; cursor: pointer; }
+        .page-btn.active { background: #6366f1; }
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0f172a; z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; gap: 12px; }
+        .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-top-color: #6366f1; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .hidden { display: none !important; }
+        .spinning { animation: spin 1s linear infinite; }
     </style>
 </head>
 <body>
 
-    <!-- LOADING OVERLAY -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="spinner"></div>
-        <p style="font-weight: 500; color: #94a3b8;">Memuat data dashboard...</p>
+        <p style="color: #94a3b8;">Menyelaraskan Multi-Sheet Data...</p>
     </div>
 
-    <!-- SIDEBAR NAVIGATION -->
-    <div class="sidebar">
-        <div class="sidebar-brand">
-            <span>🛡️ Mantis Dashboard</span>
-        </div>
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-brand">📊 <span>Mantis Panel</span></div>
         <ul class="nav-menu">
-            <li><a class="nav-item active" id="nav-overview" onclick="navigateTo('overview')">Overview</a></li>
-            <li><a class="nav-item" id="nav-tickets" onclick="navigateTo('tickets')">Daftar Tiket</a></li>
-            <li><a class="nav-item" id="nav-sla" onclick="navigateTo('sla')">Analisis SLA</a></li>
-            <li><a class="nav-item" id="nav-branch" onclick="navigateTo('branch')">Analisis Cabang</a></li>
-            <li><a class="nav-item" id="nav-tag" onclick="navigateTo('tag')">Analisis Tag</a></li>
+            <li><a id="nav-overview" class="nav-item active" data-section="overview">Overview</a></li>
+            <li><a id="nav-tickets" class="nav-item" data-section="tickets">Daftar Tiket</a></li>
+            <li><a id="nav-sla" class="nav-item" data-section="sla">Analisis SLA</a></li>
+            <li><a id="nav-branch" class="nav-item" data-section="branch">Analisis Cabang</a></li>
+            <li><a id="nav-tag" class="nav-item" data-section="tag">Analisis Tag 🏷️</a></li>
         </ul>
-        <div style="margin-top: auto; padding-top: 20px;">
-            <div class="meta-info ds-val">Menghubungkan...</div>
-            <div class="meta-info" id="lastUpdateEl">Update: -</div>
+        <div style="margin-top: auto; font-size: 11px; color: #64748b;">
+            <div class="ds-val">Menghubungkan...</div>
+            <div id="lastUpdate">Update: -</div>
         </div>
     </div>
 
-    <!-- MAIN CONTENT AREA -->
-    <div class="main-content">
-        <!-- TOP HEADER WITH FILTERS -->
+    <div id="main" class="main-content">
         <div class="header">
-            <div class="header-title">
-                <h1 id="currentPageTitle">Overview</h1>
-            </div>
+            <h1 id="currentPageTitle" style="font-size: 20px;">Overview</h1>
+            <button id="sidebarToggle" style="display:none;"></button> <button id="mobileMenuBtn" style="display:none;"></button>
             <div class="global-filters">
-                <select id="filterMonth" class="filter-select">
-                    <option value="">Semua Bulan</option>
-                </select>
-                <select id="filterProduct" class="filter-select">
-                    <option value="">Semua Produk</option>
-                </select>
-                <select id="filterTag" class="filter-select">
-                    <option value="">Semua Tag</option>
-                </select>
-                <select id="filterBranch" class="filter-select">
-                    <option value="">Semua Cabang</option>
-                </select>
-                <button id="refreshBtn" class="btn-refresh" onclick="loadData()">
-                    <span>🔄</span> Refresh
-                </button>
+                <select id="filterMonth" class="filter-select"><option value="">Semua Bulan</option></select>
+                <select id="filterProduct" class="filter-select"><option value="">Semua Produk</option></select>
+                <button id="refreshBtn" class="filter-select" style="cursor:pointer;">🔄 Refresh</button>
             </div>
         </div>
 
-        <!-- SECTIONS CONTENT CONTAINER -->
         <div class="content-body">
-            
-            <!-- SECTION: OVERVIEW -->
             <div id="section-overview" class="section active">
-                <div class="kpi-grid" id="kpiContainer">
-                    <!-- KPI Cards akan di-render otomatis dari JS -->
+                <div class="kpi-grid">
+                    <div class="kpi-card"><h3>Total Kasus</h3><p id="kpiTotal">0</p></div>
+                    <div class="kpi-card"><h3>Kasus Selesai</h3><p id="kpiResolved">0</p></div>
+                    <div class="kpi-card"><h3>Kasus Outstanding</h3><p id="kpiOpen">0</p></div>
                 </div>
                 <div class="chart-grid">
-                    <div class="chart-card">
-                        <h4>Tren Tiket Bulanan</h4>
-                        <div style="height:300px;"><canvas id="trendChart"></canvas></div>
-                    </div>
-                    <div class="chart-card">
-                        <h4>Status Tiket</h4>
-                        <div style="height:300px;"><canvas id="statusChart"></canvas></div>
-                    </div>
+                    <div class="chart-card"><h4>Tren Bulanan</h4><canvas id="trendChart"></canvas></div>
+                    <div class="chart-card"><h4>Proporsi Status</h4><canvas id="statusChart"></canvas></div>
                 </div>
                 <div class="chart-grid">
-                    <div class="chart-card">
-                        <h4>Kategori Kasus Teratas</h4>
-                        <div style="height:300px;"><canvas id="categoryChart"></canvas></div>
-                    </div>
-                    <div class="chart-card">
-                        <h4>Distribusi Produk Utama</h4>
-                        <div style="height:300px;"><canvas id="productChart"></canvas></div>
-                    </div>
+                    <div class="chart-card"><h4>Top Kategori</h4><canvas id="categoryChart"></canvas></div>
+                    <div class="chart-card"><h4>Distribusi Root Cause</h4><canvas id="rootCauseChart"></canvas></div>
                 </div>
             </div>
 
-            <!-- SECTION: DAFTAR TIKET -->
             <div id="section-tickets" class="section">
-                <div class="table-container">
-                    <input type="text" id="tableSearch" class="search-box" placeholder="Cari ID, Cabang, Tag, Produk...">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <input type="text" id="tableSearch" class="search-box" placeholder="Cari ID, Summary, Cabang...">
+                    <span id="tableCount" style="color: #94a3b8;">0 tiket</span>
+                </div>
+                <div style="overflow-x: auto;">
                     <table>
                         <thead>
                             <tr>
-                                <th class="sortable" data-col="Id">ID Tiket</th>
-                                <th>Summary</th>
-                                <th class="sortable" data-col="Branch Name">Cabang</th>
-                                <th class="sortable" data-col="Category">Kategori</th>
-                                <th class="sortable" data-col="Product Source">Produk</th>
-                                <th class="sortable" data-col="Status">Status</th>
+                                <th>ID</th><th>Tanggal</th><th>Summary</th><th>Kategori</th><th>Produk</th><th>Status</th><th>Root Cause</th><th>SLA</th><th>Tags (Sheet 2)</th><th>Cabang</th>
                             </tr>
                         </thead>
-                        <tbody id="ticketTableBody">
-                            <!-- Data tabel ter-render dinamis -->
-                        </tbody>
+                        <tbody id="ticketTableBody"></tbody>
                     </table>
-                    <div class="pagination" id="paginationEl"></div>
                 </div>
+                <div id="pagination" style="margin-top: 16px; display: flex; justify-content: flex-end;"></div>
             </div>
 
-            <!-- SECTION: ANALISIS SLA -->
             <div id="section-sla" class="section">
                 <div class="chart-grid">
-                    <div class="chart-card">
-                        <h4>Pencapaian SLA Per Bulan</h4>
-                        <div style="height:350px;"><canvas id="slaTrendChart"></canvas></div>
-                    </div>
-                    <div class="chart-card">
-                        <h4>SLA Berdasarkan Kategori</h4>
-                        <div style="height:350px;"><canvas id="slaCategoryChart"></canvas></div>
-                    </div>
+                    <div class="chart-card"><h4>Pemenuhan SLA</h4><canvas id="slaDistChart"></canvas></div>
+                    <div class="chart-card"><h4>Karakteristik Produk</h4><canvas id="productChart"></canvas></div>
                 </div>
             </div>
 
-            <!-- SECTION: ANALISIS CABANG -->
             <div id="section-branch" class="section">
-                <div class="chart-grid">
-                    <div class="chart-card">
-                        <h4>Top 10 Cabang dengan Tiket Terbanyak</h4>
-                        <div style="height:400px;"><canvas id="topBranchChart"></canvas></div>
-                    </div>
+                <div class="chart-grid" style="grid-template-columns: 1fr;">
+                    <div class="chart-card" style="height: 450px;"><h4>Sebaran Kasus Per Cabang</h4><canvas id="branchBarChart"></canvas></div>
                 </div>
             </div>
 
-            <!-- SECTION: ANALISIS TAG (BARU) -->
             <div id="section-tag" class="section">
-                <!-- Baris 1: Top 20 Tags & Top 10 Pie -->
-                <div class="chart-grid">
-                    <div class="chart-card">
-                        <h4>Top 20 Tag Paling Sering Muncul</h4>
-                        <div style="height:400px;"><canvas id="top20TagsChart"></canvas></div>
-                    </div>
-                    <div class="chart-card">
-                        <h4>Top 10 Distribusi Komposisi Tag</h4>
-                        <div style="height:400px;"><canvas id="top10TagsPieChart"></canvas></div>
-                    </div>
-                </div>
-
-                <!-- Baris 2: Analisis Silang Cabang & Tag Berdasarkan Pilihan -->
-                <div class="chart-grid">
-                    <div class="chart-card">
-                        <div class="card-header-flex">
-                            <h4>Top 10 Cabang Berdasarkan Tag</h4>
-                            <select id="tagSectionSelect" class="filter-select"></select>
-                        </div>
-                        <div style="height:350px;"><canvas id="tagBranchChart"></canvas></div>
-                    </div>
-
-                    <div class="chart-card">
-                        <div class="card-header-flex">
-                            <h4>Top 10 Tag Berdasarkan Cabang</h4>
-                            <select id="branchSectionSelect" class="filter-select"></select>
-                        </div>
-                        <div style="height:350px;"><canvas id="branchTagChart"></canvas></div>
-                    </div>
+                <div class="chart-grid" style="grid-template-columns: 1fr;">
+                    <div class="chart-card" style="height: 450px;"><h4>Top Frekuensi Penggunaan Tag Kasus</h4><canvas id="tagBarChart"></canvas></div>
                 </div>
             </div>
-
         </div>
     </div>
 
-    <!-- DEPENDENCIES -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- APP LOGIC -->
     <script src="app.js"></script>
 </body>
 </html>
