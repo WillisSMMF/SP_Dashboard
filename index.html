@@ -4,12 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mantis Bug Tracker Dashboard | Product Support</title>
-  <meta name="description" content="Dashboard interaktif tim Product Support." />
+  <meta name="description" content="Dashboard interaktif tim Product Support — tiket, SLA, cabang, tag, dan drawdown." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- SheetJS for XLSX export -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF + AutoTable for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -42,6 +47,14 @@
       <a href="#branch" class="nav-item" data-section="branch" id="nav-branch">
         <span class="nav-icon">🗺️</span>
         <span class="nav-label">Cabang</span>
+      </a>
+      <a href="#tags" class="nav-item" data-section="tags" id="nav-tags">
+        <span class="nav-icon">🏷️</span>
+        <span class="nav-label">Tag</span>
+      </a>
+      <a href="#drawdown" class="nav-item" data-section="drawdown" id="nav-drawdown">
+        <span class="nav-icon">💰</span>
+        <span class="nav-label">Drawdown</span>
       </a>
     </nav>
 
@@ -80,6 +93,13 @@
           <select id="filterProduct" class="filter-select">
             <option value="">Semua</option>
           </select>
+        </div>
+        <!-- Export Buttons -->
+        <div class="export-group" title="Export data yang sedang ditampilkan">
+          <span class="export-label">Export:</span>
+          <button class="export-btn" id="exportCSV" title="Export CSV">📄 CSV</button>
+          <button class="export-btn" id="exportXLSX" title="Export Excel">📊 XLSX</button>
+          <button class="export-btn" id="exportPDF" title="Export PDF">📑 PDF</button>
         </div>
         <button class="refresh-btn" id="refreshBtn" title="Refresh Data">
           <span class="refresh-icon">↻</span>
@@ -361,6 +381,150 @@
             <div class="chart-body chart-body-tall">
               <canvas id="branchRcChart"></canvas>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== SECTION: TAGS ===== -->
+      <section class="section" id="section-tags">
+        <div class="section-header">
+          <h1 class="section-title">Analisis Tag</h1>
+          <p class="section-subtitle">Breakdown detail masalah berdasarkan tag dari sheet Helper_Tag (1 tiket bisa punya banyak tag)</p>
+        </div>
+
+        <div class="charts-row">
+          <div class="chart-card chart-lg">
+            <div class="chart-header">
+              <h3>Top 20 Tag Paling Sering Muncul</h3>
+            </div>
+            <div class="chart-body chart-body-tall">
+              <canvas id="topTagsChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Distribusi Tag per Kategori</h3>
+            </div>
+            <div class="chart-body chart-body-tall">
+              <canvas id="tagCategoryChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="charts-row">
+          <div class="chart-card chart-lg">
+            <div class="chart-header">
+              <h3>Top 10 Cabang × Top 5 Tag (Stacked)</h3>
+            </div>
+            <div class="chart-body chart-body-tall">
+              <canvas id="branchTagChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Tren Top 5 Tag per Bulan</h3>
+            </div>
+            <div class="chart-body chart-body-tall">
+              <canvas id="tagMonthChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== SECTION: DRAWDOWN ===== -->
+      <section class="section" id="section-drawdown">
+        <div class="section-header">
+          <h1 class="section-title">Analisis Drawdown SimFast</h1>
+          <p class="section-subtitle">Perbandingan aplikasi MUF-Drawdown vs jumlah tiket issue per cabang (dari DD_SimFast)</p>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-icon">💰</div>
+            <div class="kpi-info">
+              <div class="kpi-value" id="ddTotal">-</div>
+              <div class="kpi-label">Total Drawdown</div>
+            </div>
+          </div>
+          <div class="kpi-card kpi-resolved">
+            <div class="kpi-icon">🏙️</div>
+            <div class="kpi-info">
+              <div class="kpi-value" id="ddBranches">-</div>
+              <div class="kpi-label">Cabang Aktif</div>
+            </div>
+          </div>
+          <div class="kpi-card kpi-open">
+            <div class="kpi-icon">📊</div>
+            <div class="kpi-info">
+              <div class="kpi-value" id="ddRatio">-</div>
+              <div class="kpi-label">Issue per 100 DD</div>
+            </div>
+          </div>
+          <div class="kpi-card kpi-sla">
+            <div class="kpi-icon">🏆</div>
+            <div class="kpi-info">
+              <div class="kpi-value" id="ddTopBranch">-</div>
+              <div class="kpi-label">Cabang #1 Drawdown</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main comparison chart -->
+        <div class="charts-row">
+          <div class="chart-card" style="flex:1">
+            <div class="chart-header">
+              <h3>Top 20 Cabang: MUF-Drawdown vs Issue (Periode Sama)</h3>
+            </div>
+            <div class="chart-body chart-body-tall" style="height:460px">
+              <canvas id="ddVsIssueChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Monthly trend -->
+        <div class="charts-row">
+          <div class="chart-card chart-lg">
+            <div class="chart-header">
+              <h3>Tren Drawdown per Bulan vs Total Aplikasi</h3>
+            </div>
+            <div class="chart-body">
+              <canvas id="ddMonthChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Distribusi Status Aplikasi SimFast</h3>
+            </div>
+            <div class="chart-body">
+              <canvas id="ddStatusChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="chart-card" style="margin-top:0">
+          <div class="chart-header" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
+            <h3>Detail Top 20 Cabang — Drawdown vs Issue</h3>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="export-btn" id="exportDDCSV" style="padding:6px 14px;font-size:0.78rem">📄 Export CSV</button>
+              <button class="export-btn" id="exportDDXLSX" style="padding:6px 14px;font-size:0.78rem">📊 Export XLSX</button>
+            </div>
+          </div>
+          <div class="table-container" style="max-height:420px">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:50px">Rank</th>
+                  <th>Cabang</th>
+                  <th>Drawdown</th>
+                  <th>Issue</th>
+                  <th>Issue per 100 DD</th>
+                  <th>Avg Issue/Bulan</th>
+                </tr>
+              </thead>
+              <tbody id="ddTableBody"></tbody>
+            </table>
           </div>
         </div>
       </section>
