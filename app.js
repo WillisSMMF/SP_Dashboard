@@ -420,7 +420,7 @@ function renderTicketTable() {
     }[r.Status] || `<span class="badge">${r.Status||'-'}</span>`;
 
     return `<tr>
-      <td><a href="https://mantis.example.com/view.php?id=${r.Id}" style="color:${PALETTE.primary}">#${r.Id}</a></td>
+      <td><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary}">#${r.Id}</a></td>
       <td style="white-space:nowrap;font-size:0.78rem">${(r['Date Submitted']||'').split(' ')[0]||'-'}</td>
       <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Summary||''}">${r.Summary||'-'}</td>
       <td style="font-size:0.78rem">${r.Category||'-'}</td>
