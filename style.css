@@ -744,3 +744,39 @@ body {
   .chart-card { min-width: 100%; }
   .kpi-value { font-size: 1.5rem; }
 }
+
+/* ===== KPI Clickable Cards ===== */
+.kpi-clickable {
+  cursor: pointer;
+}
+.kpi-clickable:hover {
+  border-color: var(--kpi-color) !important;
+  transform: translateY(-3px) scale(1.01);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3), 0 0 0 1px var(--kpi-color);
+}
+.kpi-clickable:hover::after {
+  opacity: 0.14;
+}
+.kpi-clickable:active {
+  transform: translateY(-1px) scale(0.99);
+}
+.kpi-clickable .kpi-trend {
+  font-size: 0.72rem;
+  color: var(--kpi-color);
+  opacity: 0.75;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+/* ===== Tag Branch Table ===== */
+#tagBranchTable th {
+  white-space: nowrap;
+}
+#tagBranchTable td {
+  vertical-align: middle;
+}
+
+/* ===== SLA badge colours (used in DD table) ===== */
+.sla-good { color: #10b981; font-weight: 700; }
+.sla-warn { color: #f59e0b; font-weight: 700; }
+.sla-bad  { color: #f43f5e; font-weight: 700; }

@@ -10,9 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <!-- SheetJS for XLSX export -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <!-- jsPDF + AutoTable for PDF export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <link rel="stylesheet" href="style.css" />
@@ -30,34 +28,14 @@
       </div>
       <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">‹</button>
     </div>
-
     <nav class="sidebar-nav">
-      <a href="#overview" class="nav-item active" data-section="overview" id="nav-overview">
-        <span class="nav-icon">📊</span>
-        <span class="nav-label">Overview</span>
-      </a>
-      <a href="#tickets" class="nav-item" data-section="tickets" id="nav-tickets">
-        <span class="nav-icon">🎫</span>
-        <span class="nav-label">Tiket</span>
-      </a>
-      <a href="#sla" class="nav-item" data-section="sla" id="nav-sla">
-        <span class="nav-icon">⏱️</span>
-        <span class="nav-label">SLA</span>
-      </a>
-      <a href="#branch" class="nav-item" data-section="branch" id="nav-branch">
-        <span class="nav-icon">🗺️</span>
-        <span class="nav-label">Cabang</span>
-      </a>
-      <a href="#tags" class="nav-item" data-section="tags" id="nav-tags">
-        <span class="nav-icon">🏷️</span>
-        <span class="nav-label">Tag</span>
-      </a>
-      <a href="#drawdown" class="nav-item" data-section="drawdown" id="nav-drawdown">
-        <span class="nav-icon">💰</span>
-        <span class="nav-label">Drawdown</span>
-      </a>
+      <a href="#overview" class="nav-item active" data-section="overview" id="nav-overview"><span class="nav-icon">📊</span><span class="nav-label">Overview</span></a>
+      <a href="#tickets" class="nav-item" data-section="tickets" id="nav-tickets"><span class="nav-icon">🎫</span><span class="nav-label">Tiket</span></a>
+      <a href="#sla" class="nav-item" data-section="sla" id="nav-sla"><span class="nav-icon">⏱️</span><span class="nav-label">SLA</span></a>
+      <a href="#branch" class="nav-item" data-section="branch" id="nav-branch"><span class="nav-icon">🗺️</span><span class="nav-label">Cabang</span></a>
+      <a href="#tags" class="nav-item" data-section="tags" id="nav-tags"><span class="nav-icon">🏷️</span><span class="nav-label">Tag</span></a>
+      <a href="#drawdown" class="nav-item" data-section="drawdown" id="nav-drawdown"><span class="nav-icon">💰</span><span class="nav-label">Drawdown</span></a>
     </nav>
-
     <div class="sidebar-footer">
       <div class="data-source">
         <span class="ds-icon">🔗</span>
@@ -72,7 +50,6 @@
 
   <!-- Main Content -->
   <main class="main" id="main">
-    <!-- Top Bar -->
     <header class="topbar">
       <div class="topbar-left">
         <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
@@ -84,57 +61,47 @@
       <div class="topbar-right">
         <div class="filter-group">
           <label for="filterMonth">Bulan:</label>
-          <select id="filterMonth" class="filter-select">
-            <option value="">Semua</option>
-          </select>
+          <select id="filterMonth" class="filter-select"><option value="">Semua</option></select>
         </div>
         <div class="filter-group">
           <label for="filterProduct">Produk:</label>
-          <select id="filterProduct" class="filter-select">
-            <option value="">Semua</option>
-          </select>
+          <select id="filterProduct" class="filter-select"><option value="">Semua</option></select>
         </div>
-        <!-- Export Buttons -->
-        <div class="export-group" title="Export data yang sedang ditampilkan">
+        <div class="export-group">
           <span class="export-label">Export:</span>
-          <button class="export-btn" id="exportCSV" title="Export CSV">📄 CSV</button>
-          <button class="export-btn" id="exportXLSX" title="Export Excel">📊 XLSX</button>
-          <button class="export-btn" id="exportPDF" title="Export PDF">📑 PDF</button>
+          <button class="export-btn" id="exportCSV">📄 CSV</button>
+          <button class="export-btn" id="exportXLSX">📊 XLSX</button>
+          <button class="export-btn" id="exportPDF">📑 PDF</button>
         </div>
-        <button class="refresh-btn" id="refreshBtn" title="Refresh Data">
-          <span class="refresh-icon">↻</span>
-          <span>Refresh</span>
-        </button>
+        <button class="refresh-btn" id="refreshBtn"><span class="refresh-icon">↻</span><span>Refresh</span></button>
       </div>
     </header>
 
-    <!-- Loading State -->
     <div class="loading-overlay" id="loadingOverlay">
       <div class="loading-spinner"></div>
       <p class="loading-text">Memuat data dari Google Sheets...</p>
     </div>
 
-    <!-- Content Area -->
     <div class="content" id="content">
 
-      <!-- ===== SECTION: OVERVIEW ===== -->
+      <!-- ===== OVERVIEW ===== -->
       <section class="section active" id="section-overview">
         <div class="section-header">
           <h1 class="section-title">Overview Dashboard</h1>
           <p class="section-subtitle">Ringkasan performa tiket Product Support</p>
         </div>
 
-        <!-- KPI Cards -->
+        <!-- KPI Cards — semua clickable -->
         <div class="kpi-grid" id="kpiGrid">
-          <div class="kpi-card" id="kpi-total">
+          <div class="kpi-card kpi-clickable" id="kpi-total" title="Klik untuk lihat semua tiket">
             <div class="kpi-icon">🎫</div>
             <div class="kpi-info">
               <div class="kpi-value" id="kpiTotal">-</div>
               <div class="kpi-label">Total Tiket</div>
             </div>
-            <div class="kpi-trend" id="kpiTotalTrend"></div>
+            <div class="kpi-trend" id="kpiTotalTrend">→ Lihat Semua</div>
           </div>
-          <div class="kpi-card kpi-resolved" id="kpi-resolved">
+          <div class="kpi-card kpi-resolved kpi-clickable" id="kpi-resolved" title="Klik untuk lihat tiket Resolved">
             <div class="kpi-icon">✅</div>
             <div class="kpi-info">
               <div class="kpi-value" id="kpiResolved">-</div>
@@ -142,7 +109,7 @@
             </div>
             <div class="kpi-badge" id="kpiResolvedPct"></div>
           </div>
-          <div class="kpi-card kpi-open" id="kpi-open">
+          <div class="kpi-card kpi-open kpi-clickable" id="kpi-open" title="Klik untuk lihat tiket Open/On Progress">
             <div class="kpi-icon">🔓</div>
             <div class="kpi-info">
               <div class="kpi-value" id="kpiOpen">-</div>
@@ -160,57 +127,33 @@
           </div>
         </div>
 
-        <!-- Charts Row 1 -->
         <div class="charts-row">
           <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Tren Tiket per Bulan</h3>
-              <div class="chart-legend-custom" id="trendLegend"></div>
-            </div>
-            <div class="chart-body">
-              <canvas id="trendChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Tren Tiket per Bulan</h3></div>
+            <div class="chart-body"><canvas id="trendChart"></canvas></div>
           </div>
           <div class="chart-card chart-sm">
-            <div class="chart-header">
-              <h3>Status Tiket</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="statusChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Status Tiket</h3></div>
+            <div class="chart-body"><canvas id="statusChart"></canvas></div>
           </div>
         </div>
-
-        <!-- Charts Row 2 -->
         <div class="charts-row">
           <div class="chart-card">
-            <div class="chart-header">
-              <h3>Top Kategori</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="categoryChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Top Kategori</h3></div>
+            <div class="chart-body"><canvas id="categoryChart"></canvas></div>
           </div>
           <div class="chart-card">
-            <div class="chart-header">
-              <h3>Distribusi Root Cause</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="rootCauseChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Distribusi Root Cause</h3></div>
+            <div class="chart-body"><canvas id="rootCauseChart"></canvas></div>
           </div>
           <div class="chart-card">
-            <div class="chart-header">
-              <h3>Per Produk</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="productChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Per Produk</h3></div>
+            <div class="chart-body"><canvas id="productChart"></canvas></div>
           </div>
         </div>
       </section>
 
-      <!-- ===== SECTION: TICKETS ===== -->
+      <!-- ===== TICKETS ===== -->
       <section class="section" id="section-tickets">
         <div class="section-header">
           <h1 class="section-title">Daftar Tiket</h1>
@@ -228,6 +171,8 @@
               <option value="assigned">Assigned</option>
               <option value="acknowledged">Acknowledged</option>
               <option value="feedback">Feedback</option>
+              <option value="closed">Closed</option>
+              <option value="__open__">Open / On Progress</option>
             </select>
           </div>
           <div class="filter-group">
@@ -255,254 +200,155 @@
                 <th>Cabang</th>
               </tr>
             </thead>
-            <tbody id="ticketTableBody">
-            </tbody>
+            <tbody id="ticketTableBody"></tbody>
           </table>
         </div>
         <div class="pagination" id="pagination"></div>
       </section>
 
-      <!-- ===== SECTION: SLA ===== -->
+      <!-- ===== SLA ===== -->
       <section class="section" id="section-sla">
         <div class="section-header">
           <h1 class="section-title">Analisis SLA</h1>
           <p class="section-subtitle">Monitoring Service Level Agreement penyelesaian tiket</p>
         </div>
-
         <div class="kpi-grid">
-          <div class="kpi-card">
-            <div class="kpi-icon">✅</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="slaMet">-</div>
-              <div class="kpi-label">SLA ≤ 1 hari</div>
-            </div>
-          </div>
-          <div class="kpi-card kpi-open">
-            <div class="kpi-icon">⚠️</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="slaWarning">-</div>
-              <div class="kpi-label">SLA 2-3 hari</div>
-            </div>
-          </div>
-          <div class="kpi-card" style="--kpi-color: #ef4444">
-            <div class="kpi-icon">🚨</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="slaBreached">-</div>
-              <div class="kpi-label">SLA &gt; 3 hari</div>
-            </div>
-          </div>
-          <div class="kpi-card kpi-sla">
-            <div class="kpi-icon">📈</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="slaOnProgress">-</div>
-              <div class="kpi-label">On Progress</div>
-            </div>
-          </div>
+          <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-info"><div class="kpi-value" id="slaMet">-</div><div class="kpi-label">SLA ≤ 1 hari</div></div></div>
+          <div class="kpi-card kpi-open"><div class="kpi-icon">⚠️</div><div class="kpi-info"><div class="kpi-value" id="slaWarning">-</div><div class="kpi-label">SLA 2-3 hari</div></div></div>
+          <div class="kpi-card" style="--kpi-color:#ef4444"><div class="kpi-icon">🚨</div><div class="kpi-info"><div class="kpi-value" id="slaBreached">-</div><div class="kpi-label">SLA &gt; 3 hari</div></div></div>
+          <div class="kpi-card kpi-sla"><div class="kpi-icon">📈</div><div class="kpi-info"><div class="kpi-value" id="slaOnProgress">-</div><div class="kpi-label">On Progress</div></div></div>
         </div>
-
         <div class="charts-row">
-          <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Distribusi SLA (hari penyelesaian)</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="slaDistChart"></canvas>
-            </div>
-          </div>
-          <div class="chart-card chart-sm">
-            <div class="chart-header">
-              <h3>SLA per Bulan (avg hari)</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="slaMonthChart"></canvas>
-            </div>
-          </div>
+          <div class="chart-card chart-lg"><div class="chart-header"><h3>Distribusi SLA (hari penyelesaian)</h3></div><div class="chart-body"><canvas id="slaDistChart"></canvas></div></div>
+          <div class="chart-card chart-sm"><div class="chart-header"><h3>SLA per Bulan (avg hari)</h3></div><div class="chart-body"><canvas id="slaMonthChart"></canvas></div></div>
         </div>
-
         <div class="charts-row">
-          <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Top 15 Assignee berdasarkan Rata-rata SLA</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="slaAssigneeChart"></canvas>
-            </div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>SLA per Produk</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="slaProductChart"></canvas>
-            </div>
-          </div>
+          <div class="chart-card chart-lg"><div class="chart-header"><h3>Top 15 Assignee berdasarkan Rata-rata SLA</h3></div><div class="chart-body chart-body-tall"><canvas id="slaAssigneeChart"></canvas></div></div>
+          <div class="chart-card"><div class="chart-header"><h3>SLA per Produk</h3></div><div class="chart-body"><canvas id="slaProductChart"></canvas></div></div>
         </div>
       </section>
 
-      <!-- ===== SECTION: BRANCH ===== -->
+      <!-- ===== BRANCH ===== -->
       <section class="section" id="section-branch">
         <div class="section-header">
           <h1 class="section-title">Analisis per Cabang</h1>
           <p class="section-subtitle">Volume dan performa tiket berdasarkan lokasi cabang</p>
         </div>
-
         <div class="charts-row">
           <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Top 20 Cabang Paling Banyak Tiket</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="branchBarChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Top 20 Cabang Paling Banyak Tiket</h3></div>
+            <div class="chart-body chart-body-tall"><canvas id="branchBarChart"></canvas></div>
           </div>
           <div class="chart-card">
-            <div class="chart-header">
-              <h3>Status Tiket per Cabang (Top 10)</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="branchStatusChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Status Tiket per Cabang (Top 10)</h3></div>
+            <div class="chart-body chart-body-tall"><canvas id="branchStatusChart"></canvas></div>
           </div>
         </div>
-
         <div class="charts-row">
+          <!-- Judul diupdate: sekarang Top 20 + Others -->
           <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Breakdown Kategori per Cabang (Top 10)</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="branchCatChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Breakdown Kategori per Cabang — Top 20 + Others</h3></div>
+            <div class="chart-body chart-body-tall"><canvas id="branchCatChart"></canvas></div>
           </div>
           <div class="chart-card">
-            <div class="chart-header">
-              <h3>Root Cause per Cabang (Top 10)</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="branchRcChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Root Cause per Cabang (Top 10)</h3></div>
+            <div class="chart-body chart-body-tall"><canvas id="branchRcChart"></canvas></div>
           </div>
         </div>
       </section>
 
-      <!-- ===== SECTION: TAGS ===== -->
+      <!-- ===== TAGS ===== -->
       <section class="section" id="section-tags">
         <div class="section-header">
           <h1 class="section-title">Analisis Tag</h1>
           <p class="section-subtitle">Breakdown detail masalah berdasarkan tag dari sheet Helper_Tag (1 tiket bisa punya banyak tag)</p>
         </div>
-
         <div class="charts-row">
           <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Top 20 Tag Paling Sering Muncul</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="topTagsChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Top 20 Tag Paling Sering Muncul</h3></div>
+            <div class="chart-body chart-body-tall"><canvas id="topTagsChart"></canvas></div>
           </div>
           <div class="chart-card">
-            <div class="chart-header">
-              <h3>Distribusi Tag per Kategori</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="tagCategoryChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Distribusi Tag per Kategori</h3></div>
+            <div class="chart-body chart-body-tall"><canvas id="tagCategoryChart"></canvas></div>
+          </div>
+        </div>
+        <div class="charts-row">
+          <!-- Diupdate: Top 20 Cabang × Top 5 Tag + Others -->
+          <div class="chart-card chart-lg">
+            <div class="chart-header"><h3>Top 20 Cabang × Top 5 Tag + Others (Stacked)</h3></div>
+            <div class="chart-body chart-body-tall"><canvas id="branchTagChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><h3>Tren Top 5 Tag per Bulan</h3></div>
+            <div class="chart-body chart-body-tall"><canvas id="tagMonthChart"></canvas></div>
           </div>
         </div>
 
-        <div class="charts-row">
-          <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Top 10 Cabang × Top 5 Tag (Stacked)</h3>
+        <!-- Tabel List Tag × Cabang -->
+        <div class="chart-card" style="margin-top:0">
+          <div class="chart-header" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <div>
+              <h3>📋 Tabel List Tag — Detail per Cabang</h3>
+              <p style="color:#94a3b8;font-size:0.8rem;margin-top:4px">Semua status tiket · Klik header Tag untuk sort · Cari tag atau cabang di bawah</p>
             </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="branchTagChart"></canvas>
-            </div>
+            <input type="text" id="tagTableSearch" placeholder="🔍 Cari tag / cabang..." style="padding:7px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#f1f5f9;font-size:0.84rem;width:240px;outline:none"/>
           </div>
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>Tren Top 5 Tag per Bulan</h3>
-            </div>
-            <div class="chart-body chart-body-tall">
-              <canvas id="tagMonthChart"></canvas>
-            </div>
+          <div class="table-container" style="max-height:480px">
+            <table class="data-table" id="tagBranchTable">
+              <thead>
+                <tr>
+                  <th style="width:36px">#</th>
+                  <th id="tagTableSortHeader" style="cursor:pointer;user-select:none">Tag ↕</th>
+                  <th style="cursor:pointer" id="tagTotalSortHeader">Total ↕</th>
+                  <th>Cabang #1</th><th>Jml</th>
+                  <th>Cabang #2</th><th>Jml</th>
+                  <th>Cabang #3</th><th>Jml</th>
+                  <th>Cabang #4</th><th>Jml</th>
+                  <th>Cabang #5</th><th>Jml</th>
+                </tr>
+              </thead>
+              <tbody id="tagBranchTableBody"></tbody>
+            </table>
           </div>
         </div>
       </section>
 
-      <!-- ===== SECTION: DRAWDOWN ===== -->
+      <!-- ===== DRAWDOWN ===== -->
       <section class="section" id="section-drawdown">
         <div class="section-header">
           <h1 class="section-title">Analisis Drawdown SimFast</h1>
           <p class="section-subtitle">Perbandingan aplikasi MUF-Drawdown vs jumlah tiket issue per cabang (dari DD_SimFast)</p>
         </div>
 
-        <!-- KPI Cards -->
         <div class="kpi-grid">
-          <div class="kpi-card">
-            <div class="kpi-icon">💰</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="ddTotal">-</div>
-              <div class="kpi-label">Total Drawdown</div>
-            </div>
-          </div>
-          <div class="kpi-card kpi-resolved">
-            <div class="kpi-icon">🏙️</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="ddBranches">-</div>
-              <div class="kpi-label">Cabang Aktif</div>
-            </div>
-          </div>
-          <div class="kpi-card kpi-open">
-            <div class="kpi-icon">📊</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="ddRatio">-</div>
-              <div class="kpi-label">Issue per 100 DD</div>
-            </div>
-          </div>
-          <div class="kpi-card kpi-sla">
-            <div class="kpi-icon">🏆</div>
-            <div class="kpi-info">
-              <div class="kpi-value" id="ddTopBranch">-</div>
-              <div class="kpi-label">Cabang #1 Drawdown</div>
-            </div>
-          </div>
+          <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-info"><div class="kpi-value" id="ddTotal">-</div><div class="kpi-label">Total Drawdown</div></div></div>
+          <div class="kpi-card kpi-resolved"><div class="kpi-icon">🏙️</div><div class="kpi-info"><div class="kpi-value" id="ddBranches">-</div><div class="kpi-label">Cabang Aktif</div></div></div>
+          <div class="kpi-card kpi-open"><div class="kpi-icon">📊</div><div class="kpi-info"><div class="kpi-value" id="ddRatio">-</div><div class="kpi-label">Rasio Issue / DD</div></div></div>
+          <div class="kpi-card kpi-sla"><div class="kpi-icon">🏆</div><div class="kpi-info"><div class="kpi-value" id="ddTopBranch">-</div><div class="kpi-label">Cabang #1 Drawdown</div></div></div>
         </div>
 
-        <!-- Main comparison chart -->
+        <!-- Top 20 DD vs Issue -->
         <div class="charts-row">
           <div class="chart-card" style="flex:1">
-            <div class="chart-header">
-              <h3>Top 20 Cabang: MUF-Drawdown vs Issue (Periode Sama)</h3>
-            </div>
-            <div class="chart-body chart-body-tall" style="height:460px">
-              <canvas id="ddVsIssueChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Top 20 Cabang: MUF-Drawdown vs Issue (Periode Sama)</h3></div>
+            <div class="chart-body chart-body-tall" style="height:460px"><canvas id="ddVsIssueChart"></canvas></div>
           </div>
         </div>
 
-        <!-- Monthly trend -->
+        <!-- Tren bulanan (X-axis difix urutan tahun+bulan) -->
         <div class="charts-row">
           <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>Tren Drawdown per Bulan vs Total Aplikasi</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="ddMonthChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Tren Drawdown per Bulan vs Total Aplikasi</h3></div>
+            <div class="chart-body"><canvas id="ddMonthChart"></canvas></div>
           </div>
           <div class="chart-card">
-            <div class="chart-header">
-              <h3>Distribusi Status Aplikasi SimFast</h3>
-            </div>
-            <div class="chart-body">
-              <canvas id="ddStatusChart"></canvas>
-            </div>
+            <div class="chart-header"><h3>Distribusi Status Aplikasi SimFast</h3></div>
+            <div class="chart-body"><canvas id="ddStatusChart"></canvas></div>
           </div>
         </div>
 
-        <!-- Data Table -->
+        <!-- Tabel Detail Top 20 (kolom diupdate) -->
         <div class="chart-card" style="margin-top:0">
           <div class="chart-header" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
             <h3>Detail Top 20 Cabang — Drawdown vs Issue</h3>
@@ -519,14 +365,52 @@
                   <th>Cabang</th>
                   <th>Drawdown</th>
                   <th>Issue</th>
-                  <th>Issue per 100 DD</th>
-                  <th>Avg Issue/Bulan</th>
+                  <th>Rasio Issue <span style="font-weight:400;color:#94a3b8;font-size:0.75rem">(Issue÷DD)</span></th>
                 </tr>
               </thead>
               <tbody id="ddTableBody"></tbody>
             </table>
           </div>
         </div>
+
+        <!-- Top 20 Best Branch Chart -->
+        <div class="charts-row" style="margin-top:24px">
+          <div class="chart-card" style="flex:1">
+            <div class="chart-header">
+              <div>
+                <h3>🏆 Top 20 Best Cabang: MUF-Drawdown vs Issue</h3>
+                <p style="color:#94a3b8;font-size:0.8rem;margin-top:4px">Cabang dengan Drawdown terbanyak namun rasio issue terkecil — diurutkan dari rasio terkecil</p>
+              </div>
+            </div>
+            <div class="chart-body chart-body-tall" style="height:500px"><canvas id="ddBestBranchChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- List Best Branch -->
+        <div class="chart-card" style="margin-top:0">
+          <div class="chart-header" style="margin-bottom:12px">
+            <div>
+              <h3>🏅 List Top 20 Best Cabang — Performa Drawdown vs Issue</h3>
+              <p style="color:#94a3b8;font-size:0.8rem;margin-top:4px">Diurutkan: rasio Issue÷Drawdown terkecil (cabang paling efisien)</p>
+            </div>
+          </div>
+          <div class="table-container" style="max-height:520px">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:50px">Rank</th>
+                  <th>Cabang</th>
+                  <th>Drawdown</th>
+                  <th>Issue</th>
+                  <th>Rasio Issue</th>
+                  <th>Performa</th>
+                </tr>
+              </thead>
+              <tbody id="ddBestTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
       </section>
 
     </div><!-- end content -->
