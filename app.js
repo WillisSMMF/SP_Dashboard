@@ -431,37 +431,519 @@ function renderSlaProductChart(){
 }
 
 // ===== BRANCH SECTION =====
+// Shared datalabels plugin (inline, no CDN needed)
+const dataLabelsPlugin = {
+  id:'inlineLabels',
+  afterDatasetsDraw(chart){
+    const ctx=chart.ctx;
+    chart.data.datasets.forEach((ds,di)=>{
+      const meta=chart.getDatasetMeta(di);
+      if(meta.hidden)return;
+      meta.data.forEach((bar,bi)=>{
+        const val=ds.data[bi];
+        if(!val||val===0)return;
+        ctx.save();
+        ctx.font='bold 10px Inter,sans-serif';
+        ctx.fillStyle='rgba(255,255,255,0.9)';
+        ctx.textAlign='center';
+        ctx.textBaseline='middle';
+        const {x,y,width,height}=bar.getProps(['x','y','width','height'],true);
+        // For horizontal bar: place label inside bar if wide enough
+        if(chart.config.options.indexAxis==='y'){
+          const labelX=bar.x-val.toString().length*3.5-4;
+          if(bar.x-bar.base>20)ctx.fillText(val,Math.max(bar.base+val.toString().length*3.5+4,labelX+val.toString().length*3.5+4),bar.y);
+        } else {
+          if(bar.base-bar.y>14)ctx.fillText(val,bar.x,bar.y+10);
+        }
+        ctx.restore();
+      });
+    });
+  }
+};
+
+// Navigate to Tiket with combined filters
+function navToTickets(opts={}){
+  // opts: { branch, category, rootCause }
+  tableFilter.status='';
+  tableFilter.search='';
+  tableFilter.rootCause=opts.rootCause||'';
+  // Store branch/category filter for ticket table
+  window._branchFilter=opts.branch||'';
+  window._categoryFilter=opts.category||'';
+  navigateTo('tickets','');
+  // Apply after render
+  setTimeout(()=>{
+    if(opts.branch||opts.category){
+      const q=[opts.branch,opts.category].filter(Boolean).join(' ').toLowerCase();
+      tableSearchEl.value=q;
+      tableFilter.search=q;
+      renderTicketTable();
+    }
+  },50);
+}
+
 function renderBranch(){
   const counts=countBy(filteredData.map(r=>({...r,_bn:branchField(r)})),'_bn');
   const top20=topN(counts,20);
   const top20names=top20.map(x=>x[0]);
   const top10names=top20.slice(0,10).map(x=>x[0]);
-  destroyChart('branchBar');
-  charts.branchBar=new Chart(document.getElementById('branchBarChart').getContext('2d'),{type:'bar',
-    data:{labels:top20names,datasets:[{label:'Tiket',data:top20.map(x=>x[1]),backgroundColor:PALETTE.primary+'99',borderColor:PALETTE.primary,borderWidth:2,borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
-  const statuses=['resolved','assigned','acknowledged','feedback','closed'];
-  const statusColors=[PALETTE.emerald,PALETTE.primary,PALETTE.amber,PALETTE.rose,'#94a3b8'];
-  destroyChart('branchStatus');
-  charts.branchStatus=new Chart(document.getElementById('branchStatusChart').getContext('2d'),{type:'bar',
-    data:{labels:top10names,datasets:statuses.map((st,i)=>({label:st,data:top10names.map(b=>filteredData.filter(r=>branchField(r)===b&&(r.Status||'').toLowerCase()===st).length),backgroundColor:statusColors[i]+'99',borderColor:statusColors[i],borderWidth:2,borderRadius:3}))},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{position:'top',labels:{font:{size:10}}}},scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}}}});
+
+  // ── 1. Breakdown Kategori per Cabang (replaces branchBar) ──────────
   const top5cats=topN(countBy(filteredData,'Category'),5).map(x=>x[0]);
   const catDatasets=top5cats.map((c,i)=>({
-    label:c.length>25?c.slice(0,23)+'…':c,
+    label:c.length>22?c.slice(0,20)+'…':c,
     data:top20names.map(b=>filteredData.filter(r=>branchField(r)===b&&r.Category===c).length),
-    backgroundColor:MULTI[i]+'99',borderColor:MULTI[i],borderWidth:2,borderRadius:3
+    backgroundColor:MULTI[i]+'bb',borderColor:MULTI[i],borderWidth:2,borderRadius:3
   }));
-  catDatasets.push({label:'Others',data:top20names.map(b=>{const br=filteredData.filter(r=>branchField(r)===b);return br.filter(r=>!top5cats.includes(r.Category)).length;}),backgroundColor:'#94a3b8'+'88',borderColor:'#94a3b8',borderWidth:2,borderRadius:3});
+  catDatasets.push({
+    label:'Others',
+    data:top20names.map(b=>filteredData.filter(r=>branchField(r)===b&&!top5cats.includes(r.Category)).length),
+    backgroundColor:'#94a3b8'+'88',borderColor:'#94a3b8',borderWidth:2,borderRadius:3
+  });
+
+  // Compute totals per branch for label overlay
+  const branchTotals=top20names.map(b=>filteredData.filter(r=>branchField(r)===b).length);
+
   destroyChart('branchCat');
-  charts.branchCat=new Chart(document.getElementById('branchCatChart').getContext('2d'),{type:'bar',
+  const ctxCat=document.getElementById('branchCatChart').getContext('2d');
+  charts.branchCat=new Chart(ctxCat,{
+    type:'bar',
+    plugins:[{
+      id:'totalLabel',
+      afterDatasetsDraw(chart){
+        const ctx2=chart.ctx;
+        const meta=chart.getDatasetMeta(chart.data.datasets.length-1);
+        meta.data.forEach((bar,bi)=>{
+          const total=branchTotals[bi];
+          if(!total)return;
+          ctx2.save();
+          ctx2.font='bold 11px Inter,sans-serif';
+          ctx2.fillStyle='#f1f5f9';
+          ctx2.textAlign='left';
+          ctx2.textBaseline='middle';
+          ctx2.fillText(total, bar.x+5, bar.y);
+          ctx2.restore();
+        });
+      }
+    }],
     data:{labels:top20names,datasets:catDatasets},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{position:'top',labels:{font:{size:9}}}},scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}}}});
+    options:{
+      responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{position:'top',labels:{font:{size:9}}},
+        tooltip:{callbacks:{
+          footer(items){return 'Total: '+branchTotals[items[0].dataIndex];}
+        }}
+      },
+      scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}},
+      onClick(evt,els){
+        if(!els.length)return;
+        const b=top20names[els[0].index];
+        navToTickets({branch:b});
+      }
+    }
+  });
+
+  // ── 2. Root Cause per Cabang (TOP 10, replaces branchStatus position) ──
   const rcs=['System','People','Process'],rcColors=[PALETTE.primary,PALETTE.amber,PALETTE.emerald];
   destroyChart('branchRc');
-  charts.branchRc=new Chart(document.getElementById('branchRcChart').getContext('2d'),{type:'bar',
-    data:{labels:top10names,datasets:rcs.map((rc,i)=>({label:rc,data:top10names.map(b=>filteredData.filter(r=>branchField(r)===b&&r['Root Cause']===rc).length),backgroundColor:rcColors[i]+'99',borderColor:rcColors[i],borderWidth:2,borderRadius:3}))},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{position:'top'}},scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}}}});
+  const ctxRc=document.getElementById('branchRcChart').getContext('2d');
+  charts.branchRc=new Chart(ctxRc,{
+    type:'bar',
+    plugins:[{
+      id:'rcInlineLabel',
+      afterDatasetsDraw(chart){
+        const ctx2=chart.ctx;
+        chart.data.datasets.forEach((ds,di)=>{
+          const meta=chart.getDatasetMeta(di);
+          if(meta.hidden)return;
+          meta.data.forEach((bar,bi)=>{
+            const val=ds.data[bi];
+            if(!val)return;
+            const w=bar.x-bar.base;
+            if(w<18)return;
+            ctx2.save();
+            ctx2.font='bold 10px Inter,sans-serif';
+            ctx2.fillStyle='rgba(255,255,255,0.9)';
+            ctx2.textAlign='center';
+            ctx2.textBaseline='middle';
+            ctx2.fillText(val,bar.base+w/2,bar.y);
+            ctx2.restore();
+          });
+        });
+      }
+    }],
+    data:{
+      labels:top10names,
+      datasets:rcs.map((rc,i)=>({
+        label:rc,
+        data:top10names.map(b=>filteredData.filter(r=>branchField(r)===b&&r['Root Cause']===rc).length),
+        backgroundColor:rcColors[i]+'99',borderColor:rcColors[i],borderWidth:2,borderRadius:3
+      }))
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{position:'top'}},
+      scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}},
+      onClick(evt,els){
+        if(!els.length)return;
+        const b=top10names[els[0].index];
+        const rc=rcs[els[0].datasetIndex];
+        navToTickets({branch:b,rootCause:rc});
+      }
+    }
+  });
+
+  // ── 3+4. Overview Kategori ──────────────────────────────────────────
+  renderCategoryOverview();
+
+  // ── 5+6. Overview Branch ────────────────────────────────────────────
+  renderBranchOverview();
+}
+
+// ===== OVERVIEW KATEGORI (Req #3 & #4) =====
+let catOvState = { selectedCats:[], selectedMonths:[], allCats:[], allMonths:[] };
+
+function renderCategoryOverview(){
+  const allMonths=[...new Set(filteredData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+  const catCounts=countBy(filteredData,'Category');
+  const allCatsSorted=topN(catCounts,999).map(x=>x[0]);
+  const top5=allCatsSorted.slice(0,5);
+
+  // Init state if first time or data changed
+  if(catOvState.allCats.join()!==allCatsSorted.join()||catOvState.allMonths.join()!==allMonths.join()){
+    catOvState.allCats=allCatsSorted;
+    catOvState.allMonths=allMonths;
+    catOvState.selectedCats=[...top5,'Others'];
+    catOvState.selectedMonths=[...allMonths];
+  }
+
+  _buildCatOvDropdowns();
+  _drawCatOvChart();
+  _drawCatOvTable();
+}
+
+function _buildCatOvDropdowns(){
+  const catDd=document.getElementById('catOvCatDrop');
+  const monDd=document.getElementById('catOvMonDrop');
+  if(!catDd||!monDd)return;
+
+  const {allCats,allMonths,selectedCats,selectedMonths}=catOvState;
+
+  catDd.innerHTML=`
+    <div class="ov-dd-scroll">
+      <label class="ov-cb-row"><input type="checkbox" id="catOvAllCat" ${selectedCats.length===allCats.length+1?'checked':''}> <span>ALL</span></label>
+      ${allCats.map(c=>`<label class="ov-cb-row"><input type="checkbox" class="catOvCatCb" value="${c}" ${selectedCats.includes(c)?'checked':''}> <span>${c.length>35?c.slice(0,33)+'…':c}</span></label>`).join('')}
+      <label class="ov-cb-row"><input type="checkbox" class="catOvCatCb" value="Others" ${selectedCats.includes('Others')?'checked':''}> <span>Others</span></label>
+    </div>`;
+
+  monDd.innerHTML=`
+    <div class="ov-dd-scroll">
+      <label class="ov-cb-row"><input type="checkbox" id="catOvAllMon" ${selectedMonths.length===allMonths.length?'checked':''}> <span>ALL</span></label>
+      ${allMonths.map(m=>`<label class="ov-cb-row"><input type="checkbox" class="catOvMonCb" value="${m}" ${selectedMonths.includes(m)?'checked':''}> <span>${m}</span></label>`).join('')}
+    </div>`;
+
+  // ALL category toggle
+  document.getElementById('catOvAllCat').onchange=function(){
+    const cbs=document.querySelectorAll('.catOvCatCb');
+    if(this.checked){catOvState.selectedCats=[...catOvState.allCats,'Others'];}
+    else{catOvState.selectedCats=[];}
+    cbs.forEach(cb=>cb.checked=this.checked);
+    _drawCatOvChart();_drawCatOvTable();
+  };
+  document.querySelectorAll('.catOvCatCb').forEach(cb=>{
+    cb.onchange=()=>{
+      catOvState.selectedCats=Array.from(document.querySelectorAll('.catOvCatCb:checked')).map(x=>x.value);
+      _drawCatOvChart();_drawCatOvTable();
+    };
+  });
+
+  // ALL month toggle
+  document.getElementById('catOvAllMon').onchange=function(){
+    const cbs=document.querySelectorAll('.catOvMonCb');
+    if(this.checked){catOvState.selectedMonths=[...catOvState.allMonths];}
+    else{catOvState.selectedMonths=[];}
+    cbs.forEach(cb=>cb.checked=this.checked);
+    _drawCatOvChart();_drawCatOvTable();
+  };
+  document.querySelectorAll('.catOvMonCb').forEach(cb=>{
+    cb.onchange=()=>{
+      catOvState.selectedMonths=Array.from(document.querySelectorAll('.catOvMonCb:checked')).map(x=>x.value);
+      _drawCatOvChart();_drawCatOvTable();
+    };
+  });
+}
+
+function _getCatOvData(){
+  const {selectedCats,selectedMonths,allCats}=catOvState;
+  const top5=allCats.slice(0,5);
+  const months=selectedMonths.length?selectedMonths:catOvState.allMonths;
+  const cats=selectedCats.filter(c=>c!=='Others');
+  return months.map(month=>{
+    const monthRows=filteredData.filter(r=>r.Month===month);
+    const obj={month};
+    cats.forEach(c=>{ obj[c]=monthRows.filter(r=>r.Category===c).length; });
+    if(selectedCats.includes('Others')){
+      obj['Others']=monthRows.filter(r=>!cats.includes(r.Category)).length;
+    }
+    return obj;
+  });
+}
+
+function _drawCatOvChart(){
+  const {selectedCats}=catOvState;
+  const data=_getCatOvData();
+  const cats=selectedCats.filter(c=>c!=='Others');
+  const showOthers=selectedCats.includes('Others');
+
+  const datasets=[
+    ...cats.map((c,i)=>({
+      label:c.length>20?c.slice(0,18)+'…':c,
+      data:data.map(d=>d[c]||0),
+      backgroundColor:MULTI[i%MULTI.length]+'99',borderColor:MULTI[i%MULTI.length],borderWidth:2,borderRadius:4
+    })),
+    ...(showOthers?[{label:'Others',data:data.map(d=>d['Others']||0),backgroundColor:'#94a3b8'+'88',borderColor:'#94a3b8',borderWidth:2,borderRadius:4}]:[])
+  ];
+
+  destroyChart('catOv');
+  const ctx=document.getElementById('catOvChart');if(!ctx)return;
+  charts.catOv=new Chart(ctx.getContext('2d'),{
+    type:'bar',
+    plugins:[{
+      id:'catOvLabel',
+      afterDatasetsDraw(chart){
+        const ctx2=chart.ctx;
+        chart.data.datasets.forEach((ds,di)=>{
+          const meta=chart.getDatasetMeta(di);
+          if(meta.hidden)return;
+          meta.data.forEach((bar,bi)=>{
+            const val=ds.data[bi];if(!val)return;
+            const h=bar.base-bar.y;if(h<14)return;
+            ctx2.save();ctx2.font='bold 10px Inter,sans-serif';
+            ctx2.fillStyle='rgba(255,255,255,0.92)';ctx2.textAlign='center';ctx2.textBaseline='middle';
+            ctx2.fillText(val,bar.x,bar.y+h/2);ctx2.restore();
+          });
+        });
+      }
+    }],
+    data:{labels:data.map(d=>d.month),datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:10}}},
+        tooltip:{mode:'index',intersect:false}
+      },
+      scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}
+    }
+  });
+}
+
+function _drawCatOvTable(){
+  const {selectedCats,selectedMonths,allCats}=catOvState;
+  const months=selectedMonths.length?selectedMonths:catOvState.allMonths;
+  const cats=selectedCats.filter(c=>c!=='Others');
+  const showOthers=selectedCats.includes('Others');
+  const allSelected=[...cats,...(showOthers?['Others']:[])];
+
+  const tbody=document.getElementById('catOvTableBody');if(!tbody)return;
+  const rows=[];
+
+  allSelected.forEach(cat=>{
+    const branches=[...new Set(filteredData.filter(r=>cat==='Others'?!allCats.slice(0,5).includes(r.Category):r.Category===cat).map(r=>branchField(r)).filter(Boolean))];
+
+    branches.forEach(branch=>{
+      months.forEach(month=>{
+        const monthBranchRows=filteredData.filter(r=>r.Month===month&&branchField(r)===branch&&(cat==='Others'?!allCats.slice(0,5).includes(r.Category):r.Category===cat));
+        if(!monthBranchRows.length)return;
+        const rcMap=countBy(monthBranchRows,'Root Cause');
+        const topRc=topN(rcMap,1)[0];
+        // Tags
+        const tagRowsHere=filteredTagData.filter(r=>r.Month_Number&&monthNumToName(r.Month_Number)===month&&normBranch(r['Branch Name']||r['Branch']||'')===normBranch(branch));
+        const tagMap=countBy(tagRowsHere.filter(r=>r.Tag&&r.Tag.trim()!==''),'Tag');
+        const topTags=topN(tagMap,3).map(([t,n])=>`${t}(${n})`).join(', ')||'—';
+        rows.push({cat,branch,month,count:monthBranchRows.length,rc:topRc?topRc[0]:'—',rcCount:topRc?topRc[1]:0,tags:topTags});
+      });
+    });
+  });
+
+  // Compute avg per cat-month
+  const avgMap={};
+  rows.forEach(r=>{
+    const k=r.cat+'|'+r.month;
+    if(!avgMap[k])avgMap[k]={total:0,branches:new Set()};
+    avgMap[k].total+=r.count; avgMap[k].branches.add(r.branch);
+  });
+
+  // Group by cat for rowspan
+  let html='';
+  let lastCat='',lastMon='';
+  rows.forEach((r,i)=>{
+    const catSpan=rows.filter(x=>x.cat===r.cat).length;
+    const monSpan=rows.filter(x=>x.cat===r.cat&&x.month===r.month).length;
+    const k=r.cat+'|'+r.month;
+    const avg2=avgMap[k]?(avgMap[k].total/avgMap[k].branches.size).toFixed(2):'—';
+    let catCell='',monCell='';
+    if(r.cat!==lastCat){catCell=`<td rowspan="${catSpan}" style="font-weight:700;color:${PALETTE.primary};vertical-align:top;border-right:1px solid rgba(255,255,255,0.08)">${r.cat}</td>`;lastCat=r.cat;lastMon='';}
+    if(r.month!==lastMon||catCell){monCell=`<td rowspan="${monSpan}" style="font-weight:600;vertical-align:top;border-right:1px solid rgba(255,255,255,0.06)">${r.month}</td>`;lastMon=r.month;}
+    html+=`<tr>
+      ${catCell}${monCell}
+      <td style="font-size:0.78rem">${r.branch}</td>
+      <td style="font-weight:700;color:${PALETTE.rose};text-align:right">${r.count}</td>
+      <td style="font-size:0.78rem">${r.rc}</td>
+      <td style="text-align:right;color:${PALETTE.amber}">${r.rcCount}</td>
+      <td style="text-align:right;color:${PALETTE.cyan};font-weight:600">${avg2}</td>
+      <td style="font-size:0.76rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.tags}</td>
+    </tr>`;
+  });
+  tbody.innerHTML=html||'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px">Pilih kategori dan bulan di atas</td></tr>';
+}
+
+// ===== OVERVIEW BRANCH (Req #5 & #6) =====
+let brOvState = { selectedBranches:[], selectedMonths:[], allBranches:[], allMonths:[] };
+
+function renderBranchOverview(){
+  const allMonths=[...new Set(filteredData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+  const brCounts=countBy(filteredData.map(r=>({...r,_bn:branchField(r)})),'_bn');
+  const allBranchesSorted=topN(brCounts,999).map(x=>x[0]);
+  const top10=allBranchesSorted.slice(0,10);
+
+  if(brOvState.allBranches.join()!==allBranchesSorted.join()||brOvState.allMonths.join()!==allMonths.join()){
+    brOvState.allBranches=allBranchesSorted;
+    brOvState.allMonths=allMonths;
+    brOvState.selectedBranches=[...top10];
+    brOvState.selectedMonths=[...allMonths];
+  }
+
+  _buildBrOvDropdowns();
+  _drawBrOvChart();
+  _drawBrOvTable();
+}
+
+function _buildBrOvDropdowns(){
+  const brDd=document.getElementById('brOvBrDrop');
+  const monDd=document.getElementById('brOvMonDrop');
+  if(!brDd||!monDd)return;
+  const {allBranches,allMonths,selectedBranches,selectedMonths}=brOvState;
+
+  brDd.innerHTML=`<div class="ov-dd-scroll">
+    <label class="ov-cb-row"><input type="checkbox" id="brOvAllBr" ${selectedBranches.length===allBranches.length?'checked':''}> <span>ALL</span></label>
+    ${allBranches.map(b=>`<label class="ov-cb-row"><input type="checkbox" class="brOvBrCb" value="${b}" ${selectedBranches.includes(b)?'checked':''}> <span>${b.length>30?b.slice(0,28)+'…':b}</span></label>`).join('')}
+  </div>`;
+
+  monDd.innerHTML=`<div class="ov-dd-scroll">
+    <label class="ov-cb-row"><input type="checkbox" id="brOvAllMon" ${selectedMonths.length===allMonths.length?'checked':''}> <span>ALL</span></label>
+    ${allMonths.map(m=>`<label class="ov-cb-row"><input type="checkbox" class="brOvMonCb" value="${m}" ${selectedMonths.includes(m)?'checked':''}> <span>${m}</span></label>`).join('')}
+  </div>`;
+
+  document.getElementById('brOvAllBr').onchange=function(){
+    const cbs=document.querySelectorAll('.brOvBrCb');
+    brOvState.selectedBranches=this.checked?[...brOvState.allBranches]:[];
+    cbs.forEach(cb=>cb.checked=this.checked);
+    _drawBrOvChart();_drawBrOvTable();
+  };
+  document.querySelectorAll('.brOvBrCb').forEach(cb=>{
+    cb.onchange=()=>{
+      brOvState.selectedBranches=Array.from(document.querySelectorAll('.brOvBrCb:checked')).map(x=>x.value);
+      _drawBrOvChart();_drawBrOvTable();
+    };
+  });
+  document.getElementById('brOvAllMon').onchange=function(){
+    const cbs=document.querySelectorAll('.brOvMonCb');
+    brOvState.selectedMonths=this.checked?[...brOvState.allMonths]:[];
+    cbs.forEach(cb=>cb.checked=this.checked);
+    _drawBrOvChart();_drawBrOvTable();
+  };
+  document.querySelectorAll('.brOvMonCb').forEach(cb=>{
+    cb.onchange=()=>{
+      brOvState.selectedMonths=Array.from(document.querySelectorAll('.brOvMonCb:checked')).map(x=>x.value);
+      _drawBrOvChart();_drawBrOvTable();
+    };
+  });
+}
+
+function _drawBrOvChart(){
+  const {selectedBranches,selectedMonths}=brOvState;
+  const months=selectedMonths.length?selectedMonths:brOvState.allMonths;
+
+  const datasets=selectedBranches.map((b,i)=>({
+    label:b.length>18?b.slice(0,16)+'…':b,
+    data:months.map(m=>filteredData.filter(r=>r.Month===m&&branchField(r)===b).length),
+    backgroundColor:MULTI[i%MULTI.length]+'99',borderColor:MULTI[i%MULTI.length],borderWidth:2,borderRadius:4
+  }));
+
+  destroyChart('brOv');
+  const ctx=document.getElementById('brOvChart');if(!ctx)return;
+  charts.brOv=new Chart(ctx.getContext('2d'),{
+    type:'bar',
+    plugins:[{
+      id:'brOvLabel',
+      afterDatasetsDraw(chart){
+        const ctx2=chart.ctx;
+        chart.data.datasets.forEach((ds,di)=>{
+          const meta=chart.getDatasetMeta(di);
+          if(meta.hidden)return;
+          meta.data.forEach((bar,bi)=>{
+            const val=ds.data[bi];if(!val)return;
+            const h=bar.base-bar.y;if(h<14)return;
+            ctx2.save();ctx2.font='bold 10px Inter,sans-serif';
+            ctx2.fillStyle='rgba(255,255,255,0.92)';ctx2.textAlign='center';ctx2.textBaseline='middle';
+            ctx2.fillText(val,bar.x,bar.y+h/2);ctx2.restore();
+          });
+        });
+      }
+    }],
+    data:{labels:months,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:9}}},tooltip:{mode:'index',intersect:false}},
+      scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}
+    }
+  });
+}
+
+function _drawBrOvTable(){
+  const {selectedBranches,selectedMonths}=brOvState;
+  const months=selectedMonths.length?selectedMonths:brOvState.allMonths;
+  const tbody=document.getElementById('brOvTableBody');if(!tbody)return;
+
+  let html='';
+  selectedBranches.forEach(branch=>{
+    const branchRows=filteredData.filter(r=>branchField(r)===branch&&selectedMonths.includes(r.Month));
+    const top10cats=topN(countBy(branchRows,'Category'),10).map(([c,n])=>c);
+
+    // Issue per month
+    const issuePerMonth=months.map(m=>filteredData.filter(r=>branchField(r)===branch&&r.Month===m).length);
+    const totalIssue=issuePerMonth.reduce((a,b)=>a+b,0);
+    const avgIssue=months.length?(totalIssue/months.length).toFixed(2):'—';
+
+    // RC per month
+    const rcPerMonth=months.map(m=>{
+      const rcMap=countBy(filteredData.filter(r=>branchField(r)===branch&&r.Month===m),'Root Cause');
+      return topN(rcMap,1)[0]||['—',0];
+    });
+    const totalRc=rcPerMonth.reduce((a,b)=>a+b[1],0);
+    const avgRc=months.length?(totalRc/months.length).toFixed(2):'—';
+
+    const branchSpan=Math.max(1,months.length);
+    months.forEach((month,mi)=>{
+      const monthIssue=issuePerMonth[mi];
+      const monthRc=rcPerMonth[mi];
+      let branchCell='';
+      if(mi===0){
+        branchCell=`<td rowspan="${branchSpan}" style="font-weight:700;color:${PALETTE.primary};vertical-align:top;border-right:1px solid rgba(255,255,255,0.08)">
+          ${branch}
+          <div style="font-size:0.72rem;color:#64748b;margin-top:4px">${top10cats.slice(0,3).join(', ')}</div>
+        </td>`;
+      }
+      html+=`<tr>
+        ${branchCell}
+        <td style="font-size:0.78rem;font-weight:600">${month}</td>
+        <td style="font-weight:700;color:${PALETTE.rose};text-align:right">${monthIssue}</td>
+        <td style="text-align:right;color:${PALETTE.emerald};font-weight:600">${mi===0?avgIssue:'—'}</td>
+        <td style="font-size:0.78rem">${monthRc[0]}</td>
+        <td style="text-align:right;color:${PALETTE.amber}">${monthRc[1]}</td>
+        <td style="text-align:right;color:${PALETTE.cyan};font-weight:600">${mi===0?avgRc:'—'}</td>
+      </tr>`;
+    });
+  });
+
+  tbody.innerHTML=html||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:20px">Pilih cabang dan bulan di atas</td></tr>';
 }
 
 // ===== TAG SECTION =====
@@ -981,6 +1463,22 @@ function exportPDF(data, filename) {
 document.getElementById('exportCSV').addEventListener('click', () => exportCSV());
 document.getElementById('exportXLSX').addEventListener('click', () => exportXLSX());
 document.getElementById('exportPDF').addEventListener('click', () => exportPDF());
+
+// ===== DROPDOWN TOGGLE =====
+function toggleDrop(id) {
+  const panel = document.getElementById(id);
+  if (!panel) return;
+  const isOpen = panel.classList.contains('open');
+  // Close all others
+  document.querySelectorAll('.ov-dd-panel.open').forEach(p => p.classList.remove('open'));
+  if (!isOpen) panel.classList.add('open');
+}
+// Close dropdowns on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.ov-dd-wrap')) {
+    document.querySelectorAll('.ov-dd-panel.open').forEach(p => p.classList.remove('open'));
+  }
+});
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => { loadData(); });

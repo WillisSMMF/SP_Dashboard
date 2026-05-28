@@ -833,3 +833,53 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 .map-kpi span { font-size: 0.75rem; color: #94a3b8; display: block; margin-bottom: 4px; }
 .map-kpi strong { font-size: 1.3rem; font-weight: 700; }
 .leaflet-container { background: #0f172a !important; }
+
+/* ===== OVERVIEW DROPDOWN ===== */
+.ov-dd-wrap { position: relative; }
+.ov-dd-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #f1f5f9;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-family: Inter, sans-serif;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.ov-dd-btn:hover { background: rgba(255,255,255,0.1); }
+.ov-dd-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 240px;
+  max-height: 360px;
+  background: #1a2235;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  z-index: 999;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+.ov-dd-panel.open { display: block; }
+.ov-dd-scroll { max-height: 340px; overflow-y: auto; padding: 8px 0; }
+.ov-dd-scroll::-webkit-scrollbar { width: 4px; }
+.ov-dd-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+.ov-cb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  transition: background 0.1s;
+}
+.ov-cb-row:hover { background: rgba(255,255,255,0.05); }
+.ov-cb-row input[type=checkbox] { accent-color: #6366f1; width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; }
+.ov-cb-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Stacked totals label */
+.branch-total-label { font-size: 10px; font-weight: 700; fill: #f1f5f9; }
