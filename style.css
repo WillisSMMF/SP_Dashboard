@@ -883,3 +883,144 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 
 /* Stacked totals label */
 .branch-total-label { font-size: 10px; font-weight: 700; fill: #f1f5f9; }
+
+/* ===== TOPBAR STICKY + COLLAPSIBLE ===== */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg-surface, #1e293b);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  gap: 0;
+  height: auto !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.3);
+}
+
+.topbar-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 24px;
+  min-height: 52px;
+  gap: 12px;
+}
+
+.topbar-filters {
+  border-top: 1px solid rgba(255,255,255,0.05);
+  overflow: hidden;
+  max-height: 120px;
+  transition: max-height 0.3s ease, opacity 0.25s ease;
+  opacity: 1;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 24px 12px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #cbd5e1;
+  padding: 5px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-family: Inter, sans-serif;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.topbar-toggle-btn:hover { background: rgba(255,255,255,0.12); color: #f1f5f9; }
+
+/* Date range inputs */
+.filter-date-range { flex-wrap: wrap; }
+.date-range-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 7px;
+  padding: 2px 8px 2px 4px;
+}
+.date-input {
+  background: transparent !important;
+  border: none !important;
+  color: #f1f5f9 !important;
+  font-size: 0.78rem !important;
+  padding: 4px 4px !important;
+  cursor: pointer;
+  width: 120px;
+  outline: none;
+}
+.date-input::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+.date-sep { color: #64748b; font-size: 0.85rem; }
+.date-clear-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 3px;
+  border-radius: 4px;
+  transition: color 0.15s;
+  line-height: 1;
+}
+.date-clear-btn:hover { color: #f43f5e; }
+
+/* Active filter badges */
+.filter-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.filter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(99,102,241,0.18);
+  border: 1px solid rgba(99,102,241,0.35);
+  color: #a5b4fc;
+  padding: 3px 8px 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.filter-badge button {
+  background: none;
+  border: none;
+  color: #a5b4fc;
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0 1px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.filter-badge button:hover { opacity: 1; color: #f43f5e; }
+
+/* Content offset: account for variable topbar height */
+.content { padding-top: 20px; }
+
+/* Responsive topbar */
+@media (max-width: 900px) {
+  .topbar-main { padding: 8px 14px; }
+  .filter-bar { padding: 8px 14px 10px; gap: 7px; }
+  .date-input { width: 100px; }
+  .export-group { display: none; }
+}
+@media (max-width: 600px) {
+  .filter-date-range { flex-basis: 100%; }
+  .date-range-wrap { flex-wrap: wrap; }
+}

@@ -83,26 +83,62 @@
   </aside>
 
   <main class="main" id="main">
-    <header class="topbar">
-      <div class="topbar-left">
-        <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
-        <div class="breadcrumb">
-          <span class="breadcrumb-icon">📊</span>
-          <span id="currentPageTitle">Overview</span>
+    <!-- TOPBAR: sticky + collapsible -->
+    <header class="topbar" id="topbar">
+      <div class="topbar-main">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+          <div class="breadcrumb">
+            <span class="breadcrumb-icon">📊</span>
+            <span id="currentPageTitle">Overview</span>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button class="topbar-toggle-btn" id="topbarToggleBtn" title="Sembunyikan/tampilkan filter">
+            <span id="topbarToggleIcon">▲</span> Filter
+          </button>
+          <button class="refresh-btn" id="refreshBtn"><span class="refresh-icon">↻</span><span>Refresh</span></button>
         </div>
       </div>
-      <div class="topbar-right">
-        <div class="filter-group"><label for="filterMonth">Bulan:</label>
-          <select id="filterMonth" class="filter-select"><option value="">Semua</option></select></div>
-        <div class="filter-group"><label for="filterProduct">Produk:</label>
-          <select id="filterProduct" class="filter-select"><option value="">Semua</option></select></div>
-        <div class="export-group">
-          <span class="export-label">Export:</span>
-          <button class="export-btn" id="exportCSV">📄 CSV</button>
-          <button class="export-btn" id="exportXLSX">📊 XLSX</button>
-          <button class="export-btn" id="exportPDF">📑 PDF</button>
+
+      <!-- Collapsible filter panel -->
+      <div class="topbar-filters" id="topbarFilters">
+        <div class="filter-bar">
+
+          <!-- Bulan -->
+          <div class="filter-group">
+            <label for="filterMonth">📅 Bulan</label>
+            <select id="filterMonth" class="filter-select"><option value="">Semua</option></select>
+          </div>
+
+          <!-- Produk -->
+          <div class="filter-group">
+            <label for="filterProduct">📦 Produk</label>
+            <select id="filterProduct" class="filter-select"><option value="">Semua</option></select>
+          </div>
+
+          <!-- Date range -->
+          <div class="filter-group filter-date-range">
+            <label>📆 Rentang Tanggal</label>
+            <div class="date-range-wrap">
+              <input type="date" id="filterDateFrom" class="filter-select date-input" title="Dari tanggal"/>
+              <span class="date-sep">–</span>
+              <input type="date" id="filterDateTo" class="filter-select date-input" title="Sampai tanggal"/>
+              <button class="date-clear-btn" id="clearDateRange" title="Reset rentang tanggal">✕</button>
+            </div>
+          </div>
+
+          <!-- Active filter badges -->
+          <div class="filter-badges" id="filterBadges"></div>
+
+          <!-- Export -->
+          <div class="export-group" style="margin-left:auto">
+            <span class="export-label">Export:</span>
+            <button class="export-btn" id="exportCSV">📄 CSV</button>
+            <button class="export-btn" id="exportXLSX">📊 XLSX</button>
+            <button class="export-btn" id="exportPDF">📑 PDF</button>
+          </div>
         </div>
-        <button class="refresh-btn" id="refreshBtn"><span class="refresh-icon">↻</span><span>Refresh</span></button>
       </div>
     </header>
 
