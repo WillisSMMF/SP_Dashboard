@@ -108,7 +108,7 @@ const mainEl           = document.getElementById('main');
 const sidebarToggleEl  = document.getElementById('sidebarToggle');
 const mobileMenuBtn    = document.getElementById('mobileMenuBtn');
 const currentPageTitle = document.getElementById('currentPageTitle');
-const topbarFiltersEl  = document.getElementById('topbarFilters');
+const topbarFiltersEl  = document.getElementById('topbarFilters'); // = topbar-right div
 const topbarToggleBtn  = document.getElementById('topbarToggleBtn');
 const topbarToggleIcon = document.getElementById('topbarToggleIcon');
 const filterBadgesEl   = document.getElementById('filterBadges');
@@ -124,10 +124,10 @@ mobileMenuBtn.addEventListener('click', () => sidebarEl.classList.toggle('mobile
 let topbarCollapsed = false;
 topbarToggleBtn.addEventListener('click', () => {
   topbarCollapsed = !topbarCollapsed;
-  topbarFiltersEl.style.maxHeight = topbarCollapsed ? '0' : '';
-  topbarFiltersEl.style.opacity  = topbarCollapsed ? '0' : '';
-  topbarFiltersEl.style.overflow = topbarCollapsed ? 'hidden' : '';
-  topbarToggleIcon.textContent   = topbarCollapsed ? '▼' : '▲';
+  // topbar-right is now the collapsible target
+  const filtersEl = document.getElementById('topbarFilters');
+  if (filtersEl) filtersEl.classList.toggle('collapsed', topbarCollapsed);
+  topbarToggleIcon.textContent = topbarCollapsed ? '▼' : '▲';
   topbarToggleBtn.title = topbarCollapsed ? 'Tampilkan filter' : 'Sembunyikan filter';
 });
 
