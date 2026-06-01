@@ -83,62 +83,26 @@
   </aside>
 
   <main class="main" id="main">
-    <!-- TOPBAR: sticky + collapsible -->
-    <header class="topbar" id="topbar">
-      <div class="topbar-main">
-        <div class="topbar-left">
-          <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
-          <div class="breadcrumb">
-            <span class="breadcrumb-icon">📊</span>
-            <span id="currentPageTitle">Overview</span>
-          </div>
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+        <div class="breadcrumb">
+          <span class="breadcrumb-icon">📊</span>
+          <span id="currentPageTitle">Overview</span>
         </div>
-
-        <!-- All filters inline — same row as before, + date range + minimize -->
-        <div class="topbar-right" id="topbarFilters">
-
-          <!-- Bulan -->
-          <div class="filter-group">
-            <label for="filterMonth">Bulan:</label>
-            <select id="filterMonth" class="filter-select"><option value="">Semua</option></select>
-          </div>
-
-          <!-- Rentang Tanggal (kiri dari Produk) -->
-          <div class="filter-group filter-date-range">
-            <label>📆 Tanggal:</label>
-            <div class="date-range-wrap">
-              <input type="date" id="filterDateFrom" class="date-input" title="Dari tanggal (Date Submitted)"/>
-              <span class="date-sep">–</span>
-              <input type="date" id="filterDateTo" class="date-input" title="Sampai tanggal (Date Submitted)"/>
-              <button class="date-clear-btn" id="clearDateRange" title="Reset">✕</button>
-            </div>
-          </div>
-
-          <!-- Produk -->
-          <div class="filter-group">
-            <label for="filterProduct">Produk:</label>
-            <select id="filterProduct" class="filter-select"><option value="">Semua</option></select>
-          </div>
-
-          <!-- Active filter badges -->
-          <div class="filter-badges" id="filterBadges"></div>
-
-          <!-- Export -->
-          <div class="export-group">
-            <span class="export-label">Export:</span>
-            <button class="export-btn" id="exportCSV">📄 CSV</button>
-            <button class="export-btn" id="exportXLSX">📊 XLSX</button>
-            <button class="export-btn" id="exportPDF">📑 PDF</button>
-          </div>
-
-          <!-- Refresh -->
-          <button class="refresh-btn" id="refreshBtn"><span class="refresh-icon">↻</span><span>Refresh</span></button>
-
-          <!-- Minimize toggle -->
-          <button class="topbar-toggle-btn" id="topbarToggleBtn" title="Sembunyikan/tampilkan filter">
-            <span id="topbarToggleIcon">▲</span>
-          </button>
+      </div>
+      <div class="topbar-right">
+        <div class="filter-group"><label for="filterMonth">Bulan:</label>
+          <select id="filterMonth" class="filter-select"><option value="">Semua</option></select></div>
+        <div class="filter-group"><label for="filterProduct">Produk:</label>
+          <select id="filterProduct" class="filter-select"><option value="">Semua</option></select></div>
+        <div class="export-group">
+          <span class="export-label">Export:</span>
+          <button class="export-btn" id="exportCSV">📄 CSV</button>
+          <button class="export-btn" id="exportXLSX">📊 XLSX</button>
+          <button class="export-btn" id="exportPDF">📑 PDF</button>
         </div>
+        <button class="refresh-btn" id="refreshBtn"><span class="refresh-icon">↻</span><span>Refresh</span></button>
       </div>
     </header>
 

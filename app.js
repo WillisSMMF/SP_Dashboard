@@ -93,9 +93,6 @@ const loadingOverlay   = document.getElementById('loadingOverlay');
 const refreshBtn       = document.getElementById('refreshBtn');
 const filterMonth      = document.getElementById('filterMonth');
 const filterProduct    = document.getElementById('filterProduct');
-const filterDateFrom   = document.getElementById('filterDateFrom');
-const filterDateTo     = document.getElementById('filterDateTo');
-const clearDateRange   = document.getElementById('clearDateRange');
 const lastUpdateEl     = document.getElementById('lastUpdate');
 const tableSearchEl    = document.getElementById('tableSearch');
 const tableStatusEl    = document.getElementById('tableStatus');
@@ -108,10 +105,6 @@ const mainEl           = document.getElementById('main');
 const sidebarToggleEl  = document.getElementById('sidebarToggle');
 const mobileMenuBtn    = document.getElementById('mobileMenuBtn');
 const currentPageTitle = document.getElementById('currentPageTitle');
-const topbarFiltersEl  = document.getElementById('topbarFilters'); // = topbar-right div
-const topbarToggleBtn  = document.getElementById('topbarToggleBtn');
-const topbarToggleIcon = document.getElementById('topbarToggleIcon');
-const filterBadgesEl   = document.getElementById('filterBadges');
 
 // ===== SIDEBAR =====
 sidebarToggleEl.addEventListener('click', () => {
@@ -119,17 +112,6 @@ sidebarToggleEl.addEventListener('click', () => {
   mainEl.classList.toggle('sidebar-collapsed');
 });
 mobileMenuBtn.addEventListener('click', () => sidebarEl.classList.toggle('mobile-open'));
-
-// ===== TOPBAR COLLAPSE =====
-let topbarCollapsed = false;
-topbarToggleBtn.addEventListener('click', () => {
-  topbarCollapsed = !topbarCollapsed;
-  // topbar-right is now the collapsible target
-  const filtersEl = document.getElementById('topbarFilters');
-  if (filtersEl) filtersEl.classList.toggle('collapsed', topbarCollapsed);
-  topbarToggleIcon.textContent = topbarCollapsed ? '▼' : '▲';
-  topbarToggleBtn.title = topbarCollapsed ? 'Tampilkan filter' : 'Sembunyikan filter';
-});
 
 // ===== NAVIGATION =====
 const navItems = document.querySelectorAll('.nav-item');
@@ -168,103 +150,27 @@ function populateFilters() {
 }
 
 // ===== GLOBAL FILTERS =====
-// Parse "YYYY-MM-DD HH:mm:ss" → Date object (date only)
-function parseRowDate(dateStr) {
-  if (!dateStr) return null;
-  const d = dateStr.trim().slice(0, 10); // "YYYY-MM-DD"
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
-  return new Date(d);
-}
-
 function applyGlobalFilters() {
-  const month   = filterMonth.value;
-  const product = filterProduct.value;
-  const dateFrom = filterDateFrom.value ? new Date(filterDateFrom.value) : null;
-  const dateTo   = filterDateTo.value   ? new Date(filterDateTo.value)   : null;
-  if (dateTo) dateTo.setHours(23, 59, 59); // include full end day
-
-  filteredData = allData.filter(r => {
-    if (month && r.Month !== month) return false;
-    if (product && r['Product Source'] !== product) return false;
-    if (dateFrom || dateTo) {
-      const rd = parseRowDate(r['Date Submitted']);
-      if (!rd) return false;
-      if (dateFrom && rd < dateFrom) return false;
-      if (dateTo   && rd > dateTo)   return false;
-    }
+  const month=filterMonth.value, product=filterProduct.value;
+  filteredData=allData.filter(r=>{
+    if(month&&r.Month!==month)return false;
+    if(product&&r['Product Source']!==product)return false;
     return true;
   });
-
-  filteredTagData = tagData.filter(r => {
-    if (month && monthNumToName(r.Month_Number) !== month) return false;
-    if (product && r['Product Source'] !== product) return false;
-    if (dateFrom || dateTo) {
-      // Tag sheet may not have Date Submitted — try match by Issue ID date
-      const rd = parseRowDate(r['Date Submitted'] || r['date_submitted'] || '');
-      if (rd) {
-        if (dateFrom && rd < dateFrom) return false;
-        if (dateTo   && rd > dateTo)   return false;
-      }
-    }
+  filteredTagData=tagData.filter(r=>{
+    if(month&&monthNumToName(r.Month_Number)!==month)return false;
+    if(product&&r['Product Source']!==product)return false;
     return true;
   });
-
-  filteredDDData = ddData.filter(r => {
-    if (month) { const d = parseDDDate(r['Submit Date']); if (!d || d.month !== month) return false; }
-    if (dateFrom || dateTo) {
-      const rd = parseRowDate(r['Submit Date'] || '');
-      if (rd) {
-        if (dateFrom && rd < dateFrom) return false;
-        if (dateTo   && rd > dateTo)   return false;
-      }
-    }
+  filteredDDData=ddData.filter(r=>{
+    if(month){const d=parseDDDate(r['Submit Date']); if(!d||d.month!==month)return false;}
     return true;
   });
-
-  currentPage = 1;
-  renderFilterBadges(month, product, filterDateFrom.value, filterDateTo.value);
+  currentPage=1;
   renderAll();
 }
-
-function renderFilterBadges(month, product, dateFrom, dateTo) {
-  if (!filterBadgesEl) return;
-  const badges = [];
-  if (month)    badges.push(`<span class="filter-badge">📅 ${month} <button onclick="clearFilter('month')">✕</button></span>`);
-  if (product)  badges.push(`<span class="filter-badge">📦 ${product} <button onclick="clearFilter('product')">✕</button></span>`);
-  if (dateFrom) badges.push(`<span class="filter-badge">📆 Dari: ${dateFrom} <button onclick="clearFilter('dateFrom')">✕</button></span>`);
-  if (dateTo)   badges.push(`<span class="filter-badge">📆 S/d: ${dateTo} <button onclick="clearFilter('dateTo')">✕</button></span>`);
-  filterBadgesEl.innerHTML = badges.join('');
-}
-
-function clearFilter(type) {
-  if (type === 'month')    { filterMonth.value = ''; }
-  if (type === 'product')  { filterProduct.value = ''; }
-  if (type === 'dateFrom') { filterDateFrom.value = ''; }
-  if (type === 'dateTo')   { filterDateTo.value = ''; }
-  applyGlobalFilters();
-}
-
-// Auto-sync: when date range is set, clear month filter (and vice versa)
-filterDateFrom.addEventListener('change', () => {
-  if (filterDateFrom.value) filterMonth.value = '';
-  applyGlobalFilters();
-});
-filterDateTo.addEventListener('change', () => {
-  if (filterDateTo.value) filterMonth.value = '';
-  applyGlobalFilters();
-});
-clearDateRange.addEventListener('click', () => {
-  filterDateFrom.value = '';
-  filterDateTo.value   = '';
-  applyGlobalFilters();
-});
-
-filterMonth.addEventListener('change', () => {
-  // When month is selected, clear date range
-  if (filterMonth.value) { filterDateFrom.value = ''; filterDateTo.value = ''; }
-  applyGlobalFilters();
-});
-filterProduct.addEventListener('change', applyGlobalFilters);
+filterMonth.addEventListener('change',applyGlobalFilters);
+filterProduct.addEventListener('change',applyGlobalFilters);
 
 // ===== HELPERS =====
 function countBy(arr,key){
