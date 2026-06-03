@@ -23,6 +23,10 @@
     .chart-card{min-width:0;overflow:hidden;}
     .table-container{overflow-x:auto;-webkit-overflow-scrolling:touch;}
     .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}
+    /* Star tooltip */
+    .star-tip{position:relative;cursor:help;display:inline-block}
+    .star-tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;border:1px solid rgba(255,255,255,0.15);color:#f1f5f9;border-radius:8px;padding:8px 12px;font-size:0.76rem;white-space:pre;pointer-events:none;opacity:0;z-index:200;transition:opacity 0.15s;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,0.5)}
+    .star-tip:hover::after{opacity:1}
     /* Map styles */
     #mapContainer{width:100%;height:520px;border-radius:12px;overflow:hidden;background:#0f172a;}
     .map-tooltip-wrap .leaflet-tooltip{background:#1a2235!important;border:1px solid rgba(255,255,255,0.1)!important;color:#f1f5f9!important;border-radius:8px!important;padding:8px 12px!important;font-family:Inter,sans-serif!important;font-size:12px!important;white-space:nowrap;}
@@ -66,11 +70,11 @@
     </div>
     <nav class="sidebar-nav">
       <a href="#overview" class="nav-item active" data-section="overview" id="nav-overview"><span class="nav-icon">📊</span><span class="nav-label">Overview</span></a>
-      <a href="#tickets" class="nav-item" data-section="tickets" id="nav-tickets"><span class="nav-icon">🎫</span><span class="nav-label">Tiket</span></a>
       <a href="#sla" class="nav-item" data-section="sla" id="nav-sla"><span class="nav-icon">⏱️</span><span class="nav-label">SLA</span></a>
       <a href="#branch" class="nav-item" data-section="branch" id="nav-branch"><span class="nav-icon">🗺️</span><span class="nav-label">Cabang</span></a>
       <a href="#tags" class="nav-item" data-section="tags" id="nav-tags"><span class="nav-icon">🏷️</span><span class="nav-label">Tag</span></a>
       <a href="#drawdown" class="nav-item" data-section="drawdown" id="nav-drawdown"><span class="nav-icon">💰</span><span class="nav-label">Drawdown</span></a>
+      <a href="#tickets" class="nav-item" data-section="tickets" id="nav-tickets"><span class="nav-icon">🎫</span><span class="nav-label">Tiket</span></a>
       <a href="#map" class="nav-item" data-section="map" id="nav-map"><span class="nav-icon">🌍</span><span class="nav-label">Peta (Exp.)</span></a>
     </nav>
     <div class="sidebar-footer">
@@ -113,6 +117,7 @@
 
     <div class="content" id="content">
 
+
       <!-- ===== OVERVIEW ===== -->
       <section class="section active" id="section-overview">
         <div class="section-header">
@@ -146,49 +151,6 @@
           <div class="chart-card"><div class="chart-header"><h3>Root Cause</h3></div><div class="chart-body"><canvas id="rootCauseChart"></canvas></div></div>
           <div class="chart-card"><div class="chart-header"><h3>Per Produk</h3></div><div class="chart-body"><canvas id="productChart"></canvas></div></div>
         </div>
-      </section>
-
-      <!-- ===== TICKETS ===== -->
-      <section class="section" id="section-tickets">
-        <div class="section-header">
-          <h1 class="section-title">Daftar Tiket</h1>
-          <p class="section-subtitle">Tabel lengkap semua tiket · Export mengikuti filter aktif</p>
-        </div>
-        <div class="table-toolbar">
-          <div class="search-wrap"><span class="search-icon">🔍</span>
-            <input type="text" id="tableSearch" placeholder="Cari tiket, summary, branch..." class="search-input" /></div>
-          <div class="filter-group">
-            <select id="tableStatus" class="filter-select">
-              <option value="">Semua Status</option>
-              <option value="resolved">Resolved</option>
-              <option value="assigned">Assigned</option>
-              <option value="acknowledged">Acknowledged</option>
-              <option value="feedback">Feedback</option>
-              <option value="closed">Closed</option>
-              <option value="__open__">Open / On Progress</option>
-            </select></div>
-          <div class="filter-group">
-            <select id="tableRootCause" class="filter-select">
-              <option value="">Semua Root Cause</option>
-              <option value="System">System</option>
-              <option value="People">People</option>
-              <option value="Process">Process</option>
-            </select></div>
-          <div class="table-count" id="tableCount">-</div>
-        </div>
-        <div class="table-container">
-          <table class="data-table" id="ticketTable">
-            <thead><tr>
-              <th class="sortable" data-col="Id">ID <span class="sort-icon">↕</span></th>
-              <th class="sortable" data-col="Date Submitted">Tanggal <span class="sort-icon">↕</span></th>
-              <th>Summary</th><th>Kategori</th><th>Produk</th>
-              <th class="sortable" data-col="Status">Status <span class="sort-icon">↕</span></th>
-              <th>Root Cause</th><th>SLA</th><th>Cabang</th>
-            </tr></thead>
-            <tbody id="ticketTableBody"></tbody>
-          </table>
-        </div>
-        <div class="pagination" id="pagination"></div>
       </section>
 
       <!-- ===== SLA ===== -->
@@ -233,90 +195,6 @@
           </div>
         </div>
 
-        <!-- ===== OVERVIEW KATEGORI ===== -->
-        <div class="chart-card" style="margin-top:0">
-          <div class="chart-header" style="flex-wrap:wrap;gap:10px;align-items:flex-start">
-            <div>
-              <h3>📊 Overview Kategori — Trend Issue per Bulan</h3>
-              <p style="color:#94a3b8;font-size:0.78rem;margin-top:3px">Default: Top 5 kategori + Others · Checklist untuk menambah/kurangi</p>
-            </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-left:auto">
-              <!-- Kategori dropdown -->
-              <div class="ov-dd-wrap">
-                <button class="ov-dd-btn" onclick="toggleDrop('catOvCatDrop')">📁 Kategori ▾</button>
-                <div class="ov-dd-panel" id="catOvCatDrop"></div>
-              </div>
-              <!-- Bulan dropdown -->
-              <div class="ov-dd-wrap">
-                <button class="ov-dd-btn" onclick="toggleDrop('catOvMonDrop')">📅 Bulan ▾</button>
-                <div class="ov-dd-panel" id="catOvMonDrop"></div>
-              </div>
-            </div>
-          </div>
-          <div class="chart-body" style="height:320px;margin-top:12px"><canvas id="catOvChart"></canvas></div>
-        </div>
-
-        <!-- Tabel Overview Kategori -->
-        <div class="chart-card" style="margin-top:0">
-          <div class="chart-header" style="margin-bottom:10px">
-            <h3>📋 Detail Kategori × Cabang × Bulan</h3>
-            <p style="color:#94a3b8;font-size:0.78rem;margin-top:2px">Sesuai pilihan kategori & bulan di atas · Avg = rata-rata issue ÷ cabang per bulan</p>
-          </div>
-          <div class="table-container" style="max-height:520px">
-            <table class="data-table" id="catOvTable">
-              <thead><tr>
-                <th>Kategori</th><th>Bulan</th><th>Cabang</th>
-                <th style="text-align:right">Issue</th>
-                <th>Root Cause</th><th style="text-align:right">Jml RC</th>
-                <th style="text-align:right">Avg/Cabang</th>
-                <th>Top Tags</th>
-              </tr></thead>
-              <tbody id="catOvTableBody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- ===== OVERVIEW BRANCH ===== -->
-        <div class="chart-card" style="margin-top:0">
-          <div class="chart-header" style="flex-wrap:wrap;gap:10px;align-items:flex-start">
-            <div>
-              <h3>🏢 Overview Branch — Issue per Cabang per Bulan</h3>
-              <p style="color:#94a3b8;font-size:0.78rem;margin-top:3px">Default: Top 10 cabang · Checklist untuk menambah/kurangi</p>
-            </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-left:auto">
-              <div class="ov-dd-wrap">
-                <button class="ov-dd-btn" onclick="toggleDrop('brOvBrDrop')">🏙️ Cabang ▾</button>
-                <div class="ov-dd-panel" id="brOvBrDrop"></div>
-              </div>
-              <div class="ov-dd-wrap">
-                <button class="ov-dd-btn" onclick="toggleDrop('brOvMonDrop')">📅 Bulan ▾</button>
-                <div class="ov-dd-panel" id="brOvMonDrop"></div>
-              </div>
-            </div>
-          </div>
-          <div class="chart-body" style="height:360px;margin-top:12px"><canvas id="brOvChart"></canvas></div>
-        </div>
-
-        <!-- Tabel Overview Branch -->
-        <div class="chart-card" style="margin-top:0">
-          <div class="chart-header" style="margin-bottom:10px">
-            <h3>📋 Detail Branch × Bulan</h3>
-            <p style="color:#94a3b8;font-size:0.78rem;margin-top:2px">Avg Issue & Avg RC = total ÷ jumlah bulan dipilih</p>
-          </div>
-          <div class="table-container" style="max-height:560px">
-            <table class="data-table" id="brOvTable">
-              <thead><tr>
-                <th>Cabang</th><th>Bulan</th>
-                <th style="text-align:right">Issue</th>
-                <th style="text-align:right">Avg Issue</th>
-                <th>Root Cause</th>
-                <th style="text-align:right">Jml RC</th>
-                <th style="text-align:right">Avg RC</th>
-              </tr></thead>
-              <tbody id="brOvTableBody"></tbody>
-            </table>
-          </div>
-        </div>
 
       </section>
 
@@ -394,31 +272,80 @@
             </table>
           </div>
         </div>
-        <!-- Best Branch Chart -->
-        <div class="charts-row" style="margin-top:24px">
-          <div class="chart-card" style="flex:1">
+        <!-- Best Branch: Chart + Table side by side -->
+        <div class="charts-row" style="margin-top:24px;align-items:flex-start">
+          <!-- Chart kiri -->
+          <div class="chart-card" style="flex:1.5;min-width:300px">
             <div class="chart-header"><div>
               <h3>🏆 Top 20 Best Cabang: MUF-Drawdown vs Issue</h3>
-              <p style="color:#94a3b8;font-size:0.8rem;margin-top:4px">Patokan: Branch Name di Data_Source ↔ DD_SimFast · Rasio terkecil = paling efisien</p>
+              <p style="color:#94a3b8;font-size:0.78rem;margin-top:4px">Rasio terkecil = paling efisien · Label % = rasio issue/DD</p>
             </div></div>
-            <div class="chart-body chart-body-tall" style="height:500px"><canvas id="ddBestBranchChart"></canvas></div>
+            <div class="chart-body" style="height:540px"><canvas id="ddBestBranchChart"></canvas></div>
+          </div>
+          <!-- Tabel kanan -->
+          <div class="chart-card" style="flex:0.65;min-width:220px">
+            <div class="chart-header" style="margin-bottom:10px">
+              <div>
+                <h3>🏅 Top 20 Best Cabang</h3>
+                <p style="color:#94a3b8;font-size:0.75rem;margin-top:3px">Hover ★ untuk detail · Rasio = issue/DD</p>
+              </div>
+            </div>
+            <div class="table-container" style="max-height:540px">
+              <table class="data-table" style="font-size:0.82rem">
+                <thead><tr>
+                  <th style="width:28px;text-align:center">#</th>
+                  <th>Cabang</th>
+                  <th style="text-align:right;white-space:nowrap">Rasio</th>
+                  <th style="text-align:center">Performa</th>
+                </tr></thead>
+                <tbody id="ddBestTableBody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
-        <!-- Best Branch List -->
-        <div class="chart-card" style="margin-top:0">
-          <div class="chart-header" style="margin-bottom:12px"><div>
-            <h3>🏅 List Top 20 Best Cabang — Drawdown vs Issue</h3>
-            <p style="color:#94a3b8;font-size:0.8rem;margin-top:4px">Rasio = Issue ÷ Drawdown · Format: 1 DD : X issue</p>
-          </div></div>
-          <div class="table-container" style="max-height:520px">
-            <table class="data-table">
-              <thead><tr>
-                <th style="width:50px">Rank</th><th>Cabang</th><th>Drawdown</th><th>Issue</th><th>Rasio Issue</th><th>Performa</th>
-              </tr></thead>
-              <tbody id="ddBestTableBody"></tbody>
-            </table>
-          </div>
+      </section>
+
+      <!-- ===== TICKETS ===== -->
+      <section class="section" id="section-tickets">
+        <div class="section-header">
+          <h1 class="section-title">Daftar Tiket</h1>
+          <p class="section-subtitle">Tabel lengkap semua tiket · Export mengikuti filter aktif</p>
         </div>
+        <div class="table-toolbar">
+          <div class="search-wrap"><span class="search-icon">🔍</span>
+            <input type="text" id="tableSearch" placeholder="Cari tiket, summary, branch..." class="search-input" /></div>
+          <div class="filter-group">
+            <select id="tableStatus" class="filter-select">
+              <option value="">Semua Status</option>
+              <option value="resolved">Resolved</option>
+              <option value="assigned">Assigned</option>
+              <option value="acknowledged">Acknowledged</option>
+              <option value="feedback">Feedback</option>
+              <option value="closed">Closed</option>
+              <option value="__open__">Open / On Progress</option>
+            </select></div>
+          <div class="filter-group">
+            <select id="tableRootCause" class="filter-select">
+              <option value="">Semua Root Cause</option>
+              <option value="System">System</option>
+              <option value="People">People</option>
+              <option value="Process">Process</option>
+            </select></div>
+          <div class="table-count" id="tableCount">-</div>
+        </div>
+        <div class="table-container">
+          <table class="data-table" id="ticketTable">
+            <thead><tr>
+              <th class="sortable" data-col="Id">ID <span class="sort-icon">↕</span></th>
+              <th class="sortable" data-col="Date Submitted">Tanggal <span class="sort-icon">↕</span></th>
+              <th>Summary</th><th>Kategori</th><th>Produk</th>
+              <th class="sortable" data-col="Status">Status <span class="sort-icon">↕</span></th>
+              <th>Root Cause</th><th>SLA</th><th>Cabang</th>
+            </tr></thead>
+            <tbody id="ticketTableBody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
       </section>
 
       <!-- ===== MAP (FIX #8) ===== -->
@@ -471,7 +398,6 @@
           </div>
         </div>
       </section>
-
     </div><!-- end content -->
   </main>
 

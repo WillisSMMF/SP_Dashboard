@@ -38,6 +38,20 @@ function matchBranches(branchA, branchB) {
   return clean(branchA) === clean(branchB);
 }
 
+// canonBranch: normalisasi nama cabang untuk matching konsisten lintas sheet
+// Kudus / CAB KUDUS / KCP KUDUS / MUF-Cab Kudus → semua jadi "KUDUS"
+function canonBranch(name){
+  return (name||'').toUpperCase()
+    .replace(/^MUF[-\s]+/,'')
+    .replace(/\bCAB\.?\s*/g,'')
+    .replace(/\bKC\.?\s*/g,'')
+    .replace(/\bKCP\.?\s*/g,'')
+    .replace(/\bSYARIAH\b/g,'')
+    .replace(/[-_]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
 // Parse "17 October, 2025, 1:47" → { month, year, sortKey, label }
 function parseDDDate(dateStr) {
   if (!dateStr) return null;
@@ -292,25 +306,12 @@ function renderOverview(){
 
 function renderTrendChart(){
   const months=[...new Set(filteredData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
-  const totalData=months.map(m=>filteredData.filter(r=>r.Month===m).length);
-  const resolvedData=months.map(m=>filteredData.filter(r=>r.Month===m&&r.Status==='resolved').length);
   destroyChart('trend');
-  charts.trend=new Chart(document.getElementById('trendChart').getContext('2d'),{type:'bar',
+  charts.trend=new Chart(document.getElementById('trendChart').getContext('2d'),{type:'line',
     data:{labels:months,datasets:[
-      {label:'Total Tiket',data:totalData,backgroundColor:PALETTE.primary+'55',borderColor:PALETTE.primary,borderWidth:2,borderRadius:6,order:2},
-      {label:'Resolved',data:resolvedData,type:'line',borderColor:PALETTE.emerald,backgroundColor:PALETTE.emerald+'30',tension:0.4,fill:true,pointRadius:5,borderWidth:2.5,order:1}
-    ]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'top'},
-        tooltip:{callbacks:{afterBody(items){
-          const idx=items[0].dataIndex;
-          const tot=totalData[idx]; const res=resolvedData[idx];
-          return tot>0?[`Resolve rate: ${((res/tot)*100).toFixed(1)}%`]:[];
-        }}}
-      },
-      scales:{x:{grid:{display:false}},y:{grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true}}
-    }
-  });
+      {label:'Total Tiket',data:months.map(m=>filteredData.filter(r=>r.Month===m).length),borderColor:PALETTE.primary,backgroundColor:PALETTE.primary+'30',tension:0.4,fill:true,pointRadius:5,borderWidth:2.5},
+      {label:'Resolved',data:months.map(m=>filteredData.filter(r=>r.Month===m&&r.Status==='resolved').length),borderColor:PALETTE.emerald,backgroundColor:PALETTE.emerald+'20',tension:0.4,fill:true,pointRadius:4,borderWidth:2,borderDash:[5,3]}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true}}}});
 }
 function renderStatusChart(){
   const entries=topN(countBy(filteredData,'Status'),10);
@@ -606,11 +607,7 @@ function renderBranch(){
     }
   });
 
-  // ── 3+4. Overview Kategori ──────────────────────────────────────────
-  renderCategoryOverview();
-
-  // ── 5+6. Overview Branch ────────────────────────────────────────────
-  renderBranchOverview();
+  // ── 3+4. Overview Kategori & Branch (removed per request) ──────────────
 }
 
 // ===== OVERVIEW KATEGORI (Req #3 & #4) =====
@@ -1052,39 +1049,18 @@ function _applyTagTableSortAndFilter(query){
 }
 
 // ===== DRAWDOWN SECTION =====
-// FIX #6: Get issue count for a DD branch — try exact match first, then fuzzy
+// FIX #6: Get issue count / rows / tag rows untuk DD branch — pakai canonBranch
 function getIssueCountForDDBranch(ddBranchName){
-  const nb=normBranch(ddBranchName);
-  // Exact match
-  let count=filteredData.filter(r=>normBranch(branchField(r))===nb).length;
-  if(count>0)return count;
-  // Fuzzy: find best matching branch name from Data_Source
-  const allIssueBranches=[...new Set(filteredData.map(r=>branchField(r)).filter(Boolean))];
-  const match=allIssueBranches.find(b=>matchBranches(b,ddBranchName));
-  if(match)return filteredData.filter(r=>normBranch(branchField(r))===normBranch(match)).length;
-  return 0;
+  const canon=canonBranch(ddBranchName);
+  return filteredData.filter(r=>canonBranch(branchField(r))===canon).length;
 }
-
-// FIX #6: Get matching filteredData rows for a DD branch name
 function getIssueRowsForDDBranch(ddBranchName){
-  const nb=normBranch(ddBranchName);
-  let rows=filteredData.filter(r=>normBranch(branchField(r))===nb);
-  if(rows.length>0)return rows;
-  const allIssueBranches=[...new Set(filteredData.map(r=>branchField(r)).filter(Boolean))];
-  const match=allIssueBranches.find(b=>matchBranches(b,ddBranchName));
-  if(match)return filteredData.filter(r=>normBranch(branchField(r))===normBranch(match));
-  return[];
+  const canon=canonBranch(ddBranchName);
+  return filteredData.filter(r=>canonBranch(branchField(r))===canon);
 }
-
-// FIX #6: Get tag rows for a DD branch
 function getTagRowsForDDBranch(ddBranchName){
-  const nb=normBranch(ddBranchName);
-  let rows=filteredTagData.filter(r=>normBranch(r['Branch Name']||r['Branch']||'')===nb);
-  if(rows.length>0)return rows;
-  const allTagBranches=[...new Set(filteredTagData.map(r=>r['Branch Name']||r['Branch']||'').filter(Boolean))];
-  const match=allTagBranches.find(b=>matchBranches(b,ddBranchName));
-  if(match)return filteredTagData.filter(r=>normBranch(r['Branch Name']||r['Branch']||'')===normBranch(match));
-  return[];
+  const canon=canonBranch(ddBranchName);
+  return filteredTagData.filter(r=>canonBranch(r['Branch Name']||r['Branch']||'')===canon);
 }
 
 function renderDrawdownSection(){
@@ -1118,7 +1094,11 @@ function renderDDVsIssueChart(branchDD){
       {label:'MUF-Drawdown',data:ddCounts,backgroundColor:PALETTE.emerald+'99',borderColor:PALETTE.emerald,borderWidth:2,borderRadius:4},
       {label:'Issue/Tiket',data:issueCounts,backgroundColor:PALETTE.rose+'99',borderColor:PALETTE.rose,borderWidth:2,borderRadius:4}
     ]},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{position:'top'}},scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{position:'top'},
+        tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8'}
+      },
+      scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
 }
 
 function renderDDMonthChart(){
@@ -1183,68 +1163,71 @@ function renderDDTable(branchDD){
   }).join('');
 }
 
-// canonBranch: normalisasi nama cabang untuk matching konsisten lintas sheet
-function canonBranch(name){
-  return (name||'').toUpperCase()
-    .replace(/^MUF[-\s]+/,'')
-    .replace(/\bCAB\.?\s*/g,'')
-    .replace(/\bKC\.?\s*/g,'')
-    .replace(/\bKCP\.?\s*/g,'')
-    .replace(/\bSYARIAH\b/g,'')
-    .replace(/[-_]+/g,' ')
-    .replace(/\s+/g,' ')
-    .trim();
+// ── helpers stars ─────────────────────────────────────────────────────
+function _ddStars(ratio){
+  if(ratio===0||ratio<0.02)return 5;
+  if(ratio<0.05)return 4;
+  if(ratio<0.10)return 3;
+  if(ratio<0.20)return 2;
+  return 1;
+}
+function _ddStarHtml(stars,row){
+  const starColors=['#f43f5e','#f59e0b','#f59e0b','#10b981','#10b981'];
+  const filled='★'.repeat(stars)+'☆'.repeat(5-stars);
+  const color=starColors[stars-1]||'#94a3b8';
+  const pct=(row.ratio*100).toFixed(1);
+  const tip=`${row.branch}\nDD: ${row.ddCount}  |  Issue: ${row.issueCount}\nRasio: ${pct}%`;
+  return `<span class="star-tip" data-tip="${tip}" style="color:${color};font-size:1rem;letter-spacing:1px">${filled}</span>`;
 }
 
-// FIX #6: Best branch — pakai canonBranch agar nama "Tasikmalaya" / "CAB TASIKMALAYA" / "MUF-Cab Tasikmalaya" dihitung sama
+// FIX #6 FINAL: Best branch — canonBranch aggregasi, label %, tooltip solid, tabel compact
 function renderDDBestBranchChart(branchDD){
-  // Aggregasi issue per canonical name
+  // Aggregasi issue per canonical name (gabungkan varian nama)
   const canonIssueCounts={};
   const canonDisplayName={};
   filteredData.forEach(r=>{
     const raw=branchField(r); if(!raw)return;
-    const canon=canonBranch(raw);
-    if(!canonDisplayName[canon])canonDisplayName[canon]=raw;
-    canonIssueCounts[canon]=(canonIssueCounts[canon]||0)+1;
+    const c=canonBranch(raw);
+    if(!canonDisplayName[c])canonDisplayName[c]=raw;
+    canonIssueCounts[c]=(canonIssueCounts[c]||0)+1;
   });
 
   // Aggregasi DD per canonical name
   const canonDDCounts={};
   Object.entries(branchDD).forEach(([ddBr,cnt])=>{
-    const canon=canonBranch(ddBr);
-    if(canon) canonDDCounts[canon]=(canonDDCounts[canon]||0)+cnt;
+    const c=canonBranch(ddBr);
+    if(c) canonDDCounts[c]=(canonDDCounts[c]||0)+cnt;
   });
 
-  // Gabungkan — hanya cabang yang punya DD
-  const allBranchData=Object.entries(canonIssueCounts).map(([canon,issueCount])=>{
-    const ddCount=canonDDCounts[canon]||0;
+  // Gabungkan — hanya cabang yang ada DD-nya
+  const allBranchData=Object.entries(canonIssueCounts).map(([c,issueCount])=>{
+    const ddCount=canonDDCounts[c]||0;
     if(ddCount===0)return null;
     const ratio=issueCount/ddCount;
-    return{branch:canonDisplayName[canon]||canon,ddCount,issueCount,ratio};
+    return{branch:canonDisplayName[c]||c,ddCount,issueCount,ratio};
   }).filter(Boolean);
 
-  // Sort: rasio terkecil dulu (paling sehat); sama → DD terbanyak
+  // Sort: rasio terkecil dulu; sama → DD terbanyak
   const best20=allBranchData.sort((a,b)=>a.ratio!==b.ratio?a.ratio-b.ratio:b.ddCount-a.ddCount).slice(0,20);
 
-  // Plugin: label rasio di sebelah kanan bar terpanjang
+  // Plugin: label % di kanan bar terpanjang
   const ratioLabelPlugin={
-    id:'ratioRightLabel',
+    id:'ddBestRatioLabel',
     afterDraw(chart){
-      const ctx=chart.ctx;
-      const xScale=chart.scales.x;
+      const ctx=chart.ctx, xScale=chart.scales.x;
       best20.forEach((row,i)=>{
         const xPx=xScale.getPixelForValue(Math.max(row.ddCount,row.issueCount));
-        const meta=chart.getDatasetMeta(0);
-        if(!meta.data[i])return;
+        const meta=chart.getDatasetMeta(0); if(!meta.data[i])return;
         const yPx=meta.data[i].y;
         const rn=row.ratio;
-        const color=rn===0?'#10b981':rn<0.05?'#10b981':rn<0.15?'#f59e0b':'#f43f5e';
+        const color=rn===0||rn<0.05?'#10b981':rn<0.15?'#f59e0b':'#f43f5e';
+        const pct=(rn*100).toFixed(1)+'%';
         ctx.save();
         ctx.font='bold 10px Inter,sans-serif';
         ctx.fillStyle=color;
         ctx.textAlign='left';
         ctx.textBaseline='middle';
-        ctx.fillText(`1:${rn.toFixed(2)}`,xPx+8,yPx);
+        ctx.fillText(pct, xPx+7, yPx);
         ctx.restore();
       });
     }
@@ -1260,33 +1243,43 @@ function renderDDBestBranchChart(branchDD){
     ]},
     options:{
       responsive:true,maintainAspectRatio:false,indexAxis:'y',
-      layout:{padding:{right:70}},
+      layout:{padding:{right:68}},
       plugins:{
         legend:{position:'top'},
-        tooltip:{callbacks:{afterBody(items){
-          const idx=items[0].dataIndex;const row=best20[idx];
-          return[`Rasio Issue/DD: 1 : ${row.ratio.toFixed(2)}`];
-        }}}
+        tooltip:{
+          backgroundColor:'#1e293b',
+          borderColor:'rgba(255,255,255,0.15)',
+          borderWidth:1,
+          padding:10,
+          titleColor:'#f1f5f9',
+          bodyColor:'#94a3b8',
+          callbacks:{
+            afterBody(items){
+              const idx=items[0].dataIndex; const row=best20[idx];
+              const pct=(row.ratio*100).toFixed(1);
+              return[`Rasio: ${pct}%  (${row.issueCount} issue / ${row.ddCount} DD)`];
+            }
+          }
+        }
       },
       scales:{
         x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},
-        y:{grid:{display:false},ticks:{font:{size:11}}}
+        y:{grid:{display:false},ticks:{font:{size:10}}}
       }
     }
   });
 
+  // Tabel compact: #, Cabang, Rasio%, Stars
   const medals=['🥇','🥈','🥉'];
   document.getElementById('ddBestTableBody').innerHTML=best20.map((row,i)=>{
-    const rn=row.ratio;
-    const cls=rn===0?'sla-good':rn<0.05?'sla-good':rn<0.15?'sla-warn':'sla-bad';
-    const perf=rn===0?'⭐⭐⭐ Zero Issue!':rn<0.05?'⭐⭐⭐ Sangat Baik':rn<0.1?'⭐⭐ Baik':rn<0.2?'⭐ Cukup':'Perlu Perhatian';
+    const pct=(row.ratio*100).toFixed(1);
+    const stars=_ddStars(row.ratio);
+    const starHtml=_ddStarHtml(stars,row);
     return`<tr>
-      <td style="font-size:1.1rem">${medals[i]||`#${i+1}`}</td>
-      <td><strong>${row.branch}</strong></td>
-      <td style="text-align:right"><span style="color:${PALETTE.emerald};font-weight:700">${row.ddCount}</span></td>
-      <td style="text-align:right"><span style="color:${PALETTE.rose};font-weight:700">${row.issueCount}</span></td>
-      <td><span class="${cls}" style="white-space:nowrap;font-weight:700">1 : ${rn.toFixed(2)}</span></td>
-      <td style="font-size:0.82rem">${perf}</td>
+      <td style="text-align:center;color:#64748b;font-size:0.78rem">${medals[i]||i+1}</td>
+      <td style="font-size:0.78rem;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.branch}">${row.branch}</td>
+      <td style="text-align:right;font-weight:700;font-size:0.82rem;white-space:nowrap;color:${row.ratio<0.05?'#10b981':row.ratio<0.15?'#f59e0b':'#f43f5e'}">${pct}%</td>
+      <td style="text-align:center">${starHtml}</td>
     </tr>`;
   }).join('');
 }
