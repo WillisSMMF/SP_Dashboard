@@ -16,9 +16,9 @@
   <style>
     /* FIX #1: Responsive — no horizontal overflow */
     *,*::before,*::after{box-sizing:border-box;}
-    html,body{overflow-x:hidden;max-width:100vw;}
-    .main{min-width:0;overflow-x:hidden;}
-    .content{min-width:0;overflow-x:hidden;}
+    html,body{overflow-x:clip;max-width:100vw;}
+    .main{min-width:0;overflow-x:clip;}
+    .content{min-width:0;overflow-x:clip;}
     .charts-row{flex-wrap:wrap;}
     .chart-card{min-width:0;overflow:hidden;}
     .table-container{overflow-x:auto;-webkit-overflow-scrolling:touch;}
@@ -96,10 +96,30 @@
         </div>
       </div>
       <div class="topbar-right">
-        <div class="filter-group"><label for="filterMonth">Bulan:</label>
-          <select id="filterMonth" class="filter-select"><option value="">Semua</option></select></div>
-        <div class="filter-group"><label for="filterProduct">Produk:</label>
-          <select id="filterProduct" class="filter-select"><option value="">Semua</option></select></div>
+        <!-- hidden select kept for export compat -->
+        <select id="filterMonth" style="display:none"><option value="">Semua</option></select>
+        <div class="filter-group" style="position:relative">
+          <label style="font-size:0.78rem;color:#94a3b8">Bulan:</label>
+          <div class="ov-dd-wrap">
+            <button class="ov-dd-btn filter-select" id="filterMonthBtn" style="font-size:0.8rem;padding:5px 10px;min-width:120px;text-align:left" onclick="toggleDrop('filterMonthPanel')"><span id="filterMonthLabel">Semua Bulan</span> ▾</button>
+            <div class="ov-dd-panel" id="filterMonthPanel" style="width:220px;z-index:300"></div>
+          </div>
+        </div>
+        <div class="filter-group"><label for="filterProduct" style="font-size:0.78rem;color:#94a3b8">Produk:</label>
+          <select id="filterProduct" class="filter-select"><option value="">Semua Produk</option></select></div>
+        <div class="filter-group" style="position:relative">
+          <label style="font-size:0.78rem;color:#94a3b8">Cabang:</label>
+          <div class="ov-dd-wrap">
+            <button class="ov-dd-btn filter-select" id="filterBranchBtn" style="font-size:0.8rem;padding:5px 10px;min-width:120px;text-align:left" onclick="toggleDrop('filterBranchPanel')"><span id="filterBranchLabel">Semua Cabang</span> ▾</button>
+            <div class="ov-dd-panel" id="filterBranchPanel" style="width:250px;z-index:300">
+              <div style="padding:8px 10px 4px">
+                <input type="text" id="branchSearchInput" placeholder="🔍 Cari cabang..." oninput="filterBranchDropdown(this.value)"
+                  style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:6px 9px;color:#f1f5f9;font-size:0.8rem;outline:none"/>
+              </div>
+              <div class="ov-dd-scroll" id="filterBranchList" style="max-height:260px"></div>
+            </div>
+          </div>
+        </div>
         <div class="export-group">
           <span class="export-label">Export:</span>
           <button class="export-btn" id="exportCSV">📄 CSV</button>
@@ -143,8 +163,21 @@
           </div>
         </div>
         <div class="charts-row">
-          <div class="chart-card chart-lg"><div class="chart-header"><h3>Tren Tiket per Bulan</h3></div><div class="chart-body"><canvas id="trendChart"></canvas></div></div>
-          <div class="chart-card chart-sm"><div class="chart-header"><h3>Status Tiket</h3></div><div class="chart-body"><canvas id="statusChart"></canvas></div></div>
+          <div class="chart-card chart-lg"><div class="chart-header"><h3>Tren Tiket per Bulan</h3><p style="color:#94a3b8;font-size:0.75rem;margin-top:2px">Bar = total · Garis putus = rata-rata · Label % = perubahan bulan ke bulan</p></div><div class="chart-body" style="height:280px"><canvas id="trendChart"></canvas></div></div>
+          <div class="chart-card chart-sm" style="flex:0.75;min-width:220px">
+            <div class="chart-header"><h3>Status Tiket</h3></div>
+            <div style="padding:6px 4px;overflow-y:auto">
+              <table class="data-table" style="font-size:0.81rem;width:100%">
+                <thead><tr>
+                  <th style="width:12px;padding:6px 4px"></th>
+                  <th style="padding:6px 8px">Status</th>
+                  <th style="text-align:right;padding:6px 8px">Tiket</th>
+                  <th style="text-align:right;padding:6px 8px;min-width:90px">Porsi</th>
+                </tr></thead>
+                <tbody id="statusTableBody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
         <div class="charts-row">
           <div class="chart-card"><div class="chart-header"><h3>Top Kategori</h3></div><div class="chart-body"><canvas id="categoryChart"></canvas></div></div>

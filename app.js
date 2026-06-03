@@ -71,8 +71,14 @@ Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
 Chart.defaults.font.family = 'Inter, sans-serif';
 Chart.defaults.plugins.legend.labels.usePointStyle = true;
 Chart.defaults.plugins.legend.labels.pointStyleWidth = 8;
-Chart.defaults.plugins.tooltip.backgroundColor = '#1a2235';
-Chart.defaults.plugins.tooltip.borderColor = 'rgba(255,255,255,0.1)';
+Chart.defaults.plugins.tooltip.backgroundColor = '#1e293b';
+Chart.defaults.plugins.tooltip.borderColor = 'rgba(255,255,255,0.15)';
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.titleColor = '#f1f5f9';
+Chart.defaults.plugins.tooltip.bodyColor = '#94a3b8';
+
+filterProduct.addEventListener('change', applyGlobalFilters);
 Chart.defaults.plugins.tooltip.borderWidth = 1;
 Chart.defaults.plugins.tooltip.padding = 10;
 Chart.defaults.plugins.tooltip.titleColor = '#f1f5f9';
@@ -101,6 +107,18 @@ const PAGE_SIZE=20;
 let sortCol='Date Submitted', sortDir='desc';
 let tableFilter={search:'',status:'',rootCause:''};
 let tagTableSortField='total', tagTableSortDir='desc';
+// Global filter state (multi-month, branch)
+const filterState={ months:[], branches:[] };
+
+// ===== HELPERS (early, needed by filters) =====
+function getRowYear(r){
+  const ds=r['Date Submitted']||r['date_submitted']||'';
+  const m=ds.match(/\b(20\d{2})\b/); return m?m[1]:'';
+}
+function getRowMonthKey(r){
+  // Key used for filtering & grouping: "2025 January" or just "January"
+  const yr=getRowYear(r); return yr?`${yr} ${r.Month}`:r.Month||'';
+}
 
 // ===== DOM REFERENCES =====
 const loadingOverlay   = document.getElementById('loadingOverlay');
@@ -156,35 +174,131 @@ function navigateTo(section, statusFilter) {
 }
 
 // ===== FILTER POPULATE =====
-function populateFilters() {
-  const months=[...new Set(allData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+function populateFilters(){
+  // Product dropdown (unchanged)
   const products=[...new Set(allData.map(r=>r['Product Source']).filter(Boolean))].sort();
-  filterMonth.innerHTML='<option value="">Semua Bulan</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
   filterProduct.innerHTML='<option value="">Semua Produk</option>'+products.map(p=>`<option value="${p}">${p}</option>`).join('');
+
+  // Month checklist (year+month labels, sorted chronologically)
+  const monthKeySet=new Set();
+  allData.forEach(r=>{ const k=getRowMonthKey(r); if(k) monthKeySet.add(k); });
+  const allMonthKeys=[...monthKeySet].sort((a,b)=>{
+    const parse=s=>{const p=s.split(' ');const yr=p.length>1?parseInt(p[0]):9999;const mo=MONTH_ORDER.indexOf(p[p.length-1]);return yr*100+mo;};
+    return parse(a)-parse(b);
+  });
+  _buildMonthChecklist(allMonthKeys);
+
+  // Branch dropdown with search
+  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
+  _buildBranchChecklist(allBranches, '');
+}
+
+function _buildMonthChecklist(allMonthKeys){
+  const panel=document.getElementById('filterMonthPanel'); if(!panel)return;
+  const selAll=filterState.months.length===0||filterState.months.length===allMonthKeys.length;
+  panel.innerHTML=`<div class="ov-dd-scroll" style="max-height:280px">
+    <label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:4px">
+      <input type="checkbox" id="fmAllCb" ${selAll?'checked':''}> <span style="font-weight:600">Semua Bulan</span>
+    </label>`+
+    allMonthKeys.map(k=>`<label class="ov-cb-row">
+      <input type="checkbox" class="fmCb" value="${k}" ${filterState.months.length===0||filterState.months.includes(k)?'checked':''}>
+      <span>${k}</span>
+    </label>`).join('')+`</div>`;
+  document.getElementById('fmAllCb').onchange=function(){
+    filterState.months=this.checked?[]:[];
+    document.querySelectorAll('.fmCb').forEach(cb=>cb.checked=this.checked);
+    _updateMonthLabel(allMonthKeys); applyGlobalFilters();
+  };
+  document.querySelectorAll('.fmCb').forEach(cb=>{
+    cb.onchange=()=>{
+      filterState.months=Array.from(document.querySelectorAll('.fmCb:checked')).map(x=>x.value);
+      const allCb=document.getElementById('fmAllCb');
+      if(allCb) allCb.checked=filterState.months.length===allMonthKeys.length;
+      _updateMonthLabel(allMonthKeys); applyGlobalFilters();
+    };
+  });
+  _updateMonthLabel(allMonthKeys);
+}
+
+function _updateMonthLabel(allMonthKeys){
+  const lbl=document.getElementById('filterMonthLabel'); if(!lbl)return;
+  const n=filterState.months.length;
+  lbl.textContent=n===0||n===allMonthKeys.length?'Semua Bulan':n===1?filterState.months[0]:`${n} Bulan Dipilih`;
+}
+
+function _buildBranchChecklist(allBranches, search){
+  const list=document.getElementById('filterBranchList'); if(!list)return;
+  const filtered=search?allBranches.filter(b=>b.toLowerCase().includes(search.toLowerCase())):allBranches;
+  const selAll=filterState.branches.length===0;
+  list.innerHTML=`<label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:4px">
+      <input type="checkbox" id="fbAllCb" ${selAll?'checked':''}> <span style="font-weight:600">Semua Cabang</span>
+    </label>`+
+    filtered.map(b=>`<label class="ov-cb-row">
+      <input type="checkbox" class="fbCb" value="${b}" ${filterState.branches.length===0||filterState.branches.includes(b)?'checked':''}>
+      <span style="font-size:0.78rem">${b.length>36?b.slice(0,34)+'…':b}</span>
+    </label>`).join('');
+  document.getElementById('fbAllCb').onchange=function(){
+    filterState.branches=[];
+    document.querySelectorAll('.fbCb').forEach(cb=>cb.checked=this.checked);
+    _updateBranchLabel(); applyGlobalFilters();
+  };
+  document.querySelectorAll('.fbCb').forEach(cb=>{
+    cb.onchange=()=>{
+      filterState.branches=Array.from(document.querySelectorAll('.fbCb:checked')).map(x=>x.value);
+      const allCb=document.getElementById('fbAllCb');
+      if(allCb) allCb.checked=filterState.branches.length===allBranches.length;
+      _updateBranchLabel(); applyGlobalFilters();
+    };
+  });
+  _updateBranchLabel();
+}
+
+function _updateBranchLabel(){
+  const lbl=document.getElementById('filterBranchLabel'); if(!lbl)return;
+  const n=filterState.branches.length;
+  lbl.textContent=n===0?'Semua Cabang':n===1?filterState.branches[0].split(' ').slice(-1)[0]:`${n} Cabang`;
+}
+
+// Exposed globally for branch search input
+function filterBranchDropdown(val){
+  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
+  _buildBranchChecklist(allBranches, val);
 }
 
 // ===== GLOBAL FILTERS =====
-function applyGlobalFilters() {
-  const month=filterMonth.value, product=filterProduct.value;
+function applyGlobalFilters(){
+  const selMonths=filterState.months; // [] = all
+  const product=filterProduct.value;
+  const selBranches=filterState.branches; // [] = all
+
   filteredData=allData.filter(r=>{
-    if(month&&r.Month!==month)return false;
+    if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
     if(product&&r['Product Source']!==product)return false;
+    if(selBranches.length&&!selBranches.includes(branchField(r)))return false;
     return true;
   });
   filteredTagData=tagData.filter(r=>{
-    if(month&&monthNumToName(r.Month_Number)!==month)return false;
+    if(selMonths.length){
+      const yr=getRowYear(r);
+      const k=yr?`${yr} ${monthNumToName(r.Month_Number)}`:monthNumToName(r.Month_Number);
+      if(!selMonths.includes(k))return false;
+    }
     if(product&&r['Product Source']!==product)return false;
     return true;
   });
   filteredDDData=ddData.filter(r=>{
-    if(month){const d=parseDDDate(r['Submit Date']); if(!d||d.month!==month)return false;}
+    if(selMonths.length){
+      const d=parseDDDate(r['Submit Date']);
+      if(!d)return false;
+      // Match year+month key against selMonths
+      const k=d.year?`${d.year} ${d.month}`:d.month;
+      if(!selMonths.includes(k))return false;
+    }
     return true;
   });
   currentPage=1;
   renderAll();
 }
-filterMonth.addEventListener('change',applyGlobalFilters);
-filterProduct.addEventListener('change',applyGlobalFilters);
 
 // ===== HELPERS =====
 function countBy(arr,key){
@@ -301,24 +415,107 @@ function renderOverview(){
   document.getElementById('kpi-total').onclick=()=>{tableFilter.status='';navigateTo('tickets','');};
   document.getElementById('kpi-resolved').onclick=()=>{tableFilter.status='resolved';navigateTo('tickets','resolved');};
   document.getElementById('kpi-open').onclick=()=>{tableFilter.status='__open__';navigateTo('tickets','__open__');};
-  renderTrendChart(); renderStatusChart(); renderCategoryChart(); renderRootCauseChart(); renderProductChart();
+  renderTrendChart(); renderStatusTable(); renderCategoryChart(); renderRootCauseChart(); renderProductChart();
 }
 
 function renderTrendChart(){
-  const months=[...new Set(filteredData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+  // Use chronologically ordered months from filteredData
+  const monthKeyMap={}; // monthKey → Month (plain name)
+  filteredData.forEach(r=>{const k=getRowMonthKey(r);if(k)monthKeyMap[k]=r.Month;});
+  const sortedKeys=Object.keys(monthKeyMap).sort((a,b)=>{
+    const parse=s=>{const p=s.split(' ');const yr=p.length>1?parseInt(p[0]):9999;const mo=MONTH_ORDER.indexOf(p[p.length-1]);return yr*100+mo;};
+    return parse(a)-parse(b);
+  });
+  const labels=sortedKeys; // display as "2025 January" etc.
+  const totalData=sortedKeys.map(k=>filteredData.filter(r=>getRowMonthKey(r)===k).length);
+  const mean=totalData.length?totalData.reduce((a,b)=>a+b,0)/totalData.length:0;
+  const meanData=totalData.map(()=>parseFloat(mean.toFixed(1)));
+
+  // Plugin: % change label above each bar (vs previous bar)
+  const pctPlugin={
+    id:'trendPct',
+    afterDraw(chart){
+      if(totalData.length<2)return;
+      const ctx=chart.ctx;
+      const meta=chart.getDatasetMeta(0); // bar dataset
+      totalData.forEach((val,i)=>{
+        if(i===0)return;
+        const prev=totalData[i-1]; if(!prev)return;
+        const pct=((val-prev)/prev*100).toFixed(1);
+        const sign=val>prev?'+':'';
+        const color=val>prev?'#f43f5e':val<prev?'#10b981':'#94a3b8';
+        const bar=meta.data[i]; if(!bar)return;
+        ctx.save();
+        ctx.font='bold 10px Inter,sans-serif';
+        ctx.fillStyle=color;
+        ctx.textAlign='center';
+        ctx.textBaseline='bottom';
+        ctx.fillText(`${sign}${pct}%`,bar.x,bar.y-3);
+        ctx.restore();
+      });
+    }
+  };
+
   destroyChart('trend');
-  charts.trend=new Chart(document.getElementById('trendChart').getContext('2d'),{type:'line',
-    data:{labels:months,datasets:[
-      {label:'Total Tiket',data:months.map(m=>filteredData.filter(r=>r.Month===m).length),borderColor:PALETTE.primary,backgroundColor:PALETTE.primary+'30',tension:0.4,fill:true,pointRadius:5,borderWidth:2.5},
-      {label:'Resolved',data:months.map(m=>filteredData.filter(r=>r.Month===m&&r.Status==='resolved').length),borderColor:PALETTE.emerald,backgroundColor:PALETTE.emerald+'20',tension:0.4,fill:true,pointRadius:4,borderWidth:2,borderDash:[5,3]}
-    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true}}}});
+  charts.trend=new Chart(document.getElementById('trendChart').getContext('2d'),{
+    type:'bar',
+    plugins:[pctPlugin],
+    data:{labels,datasets:[
+      {label:'Total Tiket',data:totalData,backgroundColor:PALETTE.primary+'88',borderColor:PALETTE.primary,borderWidth:2,borderRadius:6,order:2},
+      {label:`Rata-rata (${mean.toFixed(1)})`,data:meanData,type:'line',borderColor:PALETTE.amber,backgroundColor:'transparent',borderWidth:2,borderDash:[7,4],tension:0,pointRadius:0,order:1}
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      layout:{padding:{top:28}},
+      plugins:{
+        legend:{position:'top',labels:{padding:14}},
+        tooltip:{
+          callbacks:{
+            afterBody(items){
+              const i=items[0].dataIndex;
+              if(i>0&&totalData[i-1]){
+                const pct=((totalData[i]-totalData[i-1])/totalData[i-1]*100).toFixed(1);
+                const sign=totalData[i]>=totalData[i-1]?'+':'';
+                return[`Δ vs bulan lalu: ${sign}${pct}%`];
+              }
+              return[];
+            }
+          }
+        }
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:10}}},
+        y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
 }
-function renderStatusChart(){
+
+function renderStatusTable(){
   const entries=topN(countBy(filteredData,'Status'),10);
-  destroyChart('status');
-  charts.status=new Chart(document.getElementById('statusChart').getContext('2d'),{type:'doughnut',
-    data:{labels:entries.map(x=>x[0]),datasets:[{data:entries.map(x=>x[1]),backgroundColor:MULTI.map(c=>c+'cc'),borderColor:MULTI,borderWidth:2}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}});
+  const total=filteredData.length;
+  const COLOR_MAP={
+    resolved:PALETTE.emerald,assigned:PALETTE.primary,acknowledged:PALETTE.amber,
+    feedback:PALETTE.cyan,closed:'#64748b',new:PALETTE.rose
+  };
+  document.getElementById('statusTableBody').innerHTML=entries.map(([status,count])=>{
+    const pct=total>0?(count/total*100).toFixed(1):'0.0';
+    const barW=total>0?Math.round(count/total*100):0;
+    const color=COLOR_MAP[status.toLowerCase()]||PALETTE.orange;
+    return`<tr>
+      <td style="padding:5px 4px 5px 8px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color}"></span></td>
+      <td style="padding:5px 8px;text-transform:capitalize;white-space:nowrap">${status}</td>
+      <td style="text-align:right;font-weight:700;color:#f1f5f9;padding:5px 8px">${count}</td>
+      <td style="padding:5px 8px 5px 4px">
+        <div style="display:flex;align-items:center;gap:5px">
+          <div style="flex:1;height:5px;background:rgba(255,255,255,0.07);border-radius:3px;min-width:40px">
+            <div style="width:${barW}%;height:100%;background:${color};border-radius:3px"></div>
+          </div>
+          <span style="min-width:34px;text-align:right;color:${color};font-size:0.77rem;font-weight:600">${pct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
 }
 function renderCategoryChart(){
   const top=topN(countBy(filteredData,'Category'),10);
@@ -1518,7 +1715,8 @@ function exportPDF(data, filename) {
   doc.setFontSize(13); doc.setTextColor(99, 102, 241);
   doc.text('Mantis Dashboard Report', 14, 14);
   doc.setFontSize(8); doc.setTextColor(148, 163, 184);
-  doc.text(`Bulan: ${filterMonth.value || 'Semua'} | Produk: ${filterProduct.value || 'Semua'} | Generated: ${new Date().toLocaleString('id-ID')}`, 14, 21);
+  const bulanLabel=filterState.months.length===0?'Semua':filterState.months.join(', ');
+  doc.text(`Bulan: ${bulanLabel} | Produk: ${filterProduct.value || 'Semua'} | Generated: ${new Date().toLocaleString('id-ID')}`, 14, 21);
   doc.autoTable({ head: [headers], body: rows.map(row => headers.map(h => String(row[h] || ''))), startY: 26, styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [99, 102, 241], textColor: 255, fontStyle: 'bold' }, alternateRowStyles: { fillColor: [245, 246, 250] }, margin: { left: 10, right: 10 } });
   doc.save(filename || `mantis-report-${new Date().toISOString().slice(0, 10)}.pdf`);
 }
