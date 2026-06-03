@@ -48,7 +48,7 @@ body {
   color: var(--text-primary);
   display: flex;
   min-height: 100vh;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* ===== SCROLLBAR ===== */
@@ -783,9 +783,9 @@ body {
 
 /* ===== FIX #1: RESPONSIVE OVERRIDES ===== */
 * { box-sizing: border-box; }
-html, body { overflow-x: hidden; max-width: 100vw; }
-.main { min-width: 0; overflow-x: hidden; }
-.content { min-width: 0; overflow-x: hidden; }
+html, body { overflow-x: clip; max-width: 100vw; }
+.main { min-width: 0; overflow-x: clip; }
+.content { min-width: 0; overflow-x: clip; }
 .charts-row { flex-wrap: wrap; }
 .chart-card { min-width: 0; word-break: break-word; }
 .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }

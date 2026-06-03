@@ -292,12 +292,25 @@ function renderOverview(){
 
 function renderTrendChart(){
   const months=[...new Set(filteredData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+  const totalData=months.map(m=>filteredData.filter(r=>r.Month===m).length);
+  const resolvedData=months.map(m=>filteredData.filter(r=>r.Month===m&&r.Status==='resolved').length);
   destroyChart('trend');
-  charts.trend=new Chart(document.getElementById('trendChart').getContext('2d'),{type:'line',
+  charts.trend=new Chart(document.getElementById('trendChart').getContext('2d'),{type:'bar',
     data:{labels:months,datasets:[
-      {label:'Total Tiket',data:months.map(m=>filteredData.filter(r=>r.Month===m).length),borderColor:PALETTE.primary,backgroundColor:PALETTE.primary+'30',tension:0.4,fill:true,pointRadius:5,borderWidth:2.5},
-      {label:'Resolved',data:months.map(m=>filteredData.filter(r=>r.Month===m&&r.Status==='resolved').length),borderColor:PALETTE.emerald,backgroundColor:PALETTE.emerald+'20',tension:0.4,fill:true,pointRadius:4,borderWidth:2,borderDash:[5,3]}
-    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true}}}});
+      {label:'Total Tiket',data:totalData,backgroundColor:PALETTE.primary+'55',borderColor:PALETTE.primary,borderWidth:2,borderRadius:6,order:2},
+      {label:'Resolved',data:resolvedData,type:'line',borderColor:PALETTE.emerald,backgroundColor:PALETTE.emerald+'30',tension:0.4,fill:true,pointRadius:5,borderWidth:2.5,order:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'},
+        tooltip:{callbacks:{afterBody(items){
+          const idx=items[0].dataIndex;
+          const tot=totalData[idx]; const res=resolvedData[idx];
+          return tot>0?[`Resolve rate: ${((res/tot)*100).toFixed(1)}%`]:[];
+        }}}
+      },
+      scales:{x:{grid:{display:false}},y:{grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true}}
+    }
+  });
 }
 function renderStatusChart(){
   const entries=topN(countBy(filteredData,'Status'),10);
@@ -349,9 +362,8 @@ function renderTicketTable(){
     if(sortCol==='Date Submitted'||sortCol==='Id'){av=parseFloat(av)||av;bv=parseFloat(bv)||bv;}
     return sortDir==='asc'?(av>bv?1:-1):(av<bv?1:-1);
   });
-  tableCountEl.innerHTML=`<span style="color:#f59e0b;font-weight:700">${data.length} tiket</span>`;
+  tableCountEl.textContent=`${data.length} tiket`;
   const page=data.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE);
-  const pageOffset=(currentPage-1)*PAGE_SIZE;
   const statusMap={
     resolved:`<span class="badge badge-resolved">resolved</span>`,
     assigned:`<span class="badge badge-open">assigned</span>`,
@@ -359,13 +371,11 @@ function renderTicketTable(){
     feedback:`<span class="badge badge-pending">feedback</span>`,
     closed:`<span class="badge" style="background:rgba(148,163,184,0.15);color:#94a3b8">closed</span>`,
   };
-  tableBodyEl.innerHTML=page.map((r,i)=>{
+  tableBodyEl.innerHTML=page.map(r=>{
     const sla=parseFloat(r.SLA);
     const slaClass=isNaN(sla)?'':sla<=1?'sla-good':sla<=3?'sla-warn':'sla-bad';
-    const slaLabel=isNaN(sla)?'-':(sla===1?`${sla} day`:`${sla} days`);
     const statusBadge=statusMap[(r.Status||'').toLowerCase()]||`<span class="badge">${r.Status||'-'}</span>`;
     return `<tr>
-      <td style="text-align:center;color:#64748b;font-size:0.78rem">${pageOffset+i+1}</td>
       <td><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary}">#${r.Id}</a></td>
       <td style="white-space:nowrap;font-size:0.78rem">${(r['Date Submitted']||'').split(' ')[0]||'-'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Summary||''}">${r.Summary||'-'}</td>
@@ -373,7 +383,7 @@ function renderTicketTable(){
       <td><span class="badge" style="background:${PALETTE.primary}22;color:${PALETTE.primary}">${r['Product Source']||'-'}</span></td>
       <td>${statusBadge}</td>
       <td style="font-size:0.78rem">${r['Root Cause']||'-'}</td>
-      <td><span class="${slaClass}">${slaLabel}</span></td>
+      <td><span class="${slaClass}">${isNaN(sla)?'-':sla+' hr'}</span></td>
       <td style="font-size:0.78rem">${r['Branch Name']||r.Branch||'-'}</td>
     </tr>`;
   }).join('');
@@ -601,9 +611,6 @@ function renderBranch(){
 
   // ── 5+6. Overview Branch ────────────────────────────────────────────
   renderBranchOverview();
-
-  // ── 7+8. Trend Kategori per Cabang ──────────────────────────────────
-  renderBranchTrendSection();
 }
 
 // ===== OVERVIEW KATEGORI (Req #3 & #4) =====
@@ -952,307 +959,6 @@ function _drawBrOvTable(){
   tbody.innerHTML=html||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:20px">Pilih cabang dan bulan di atas</td></tr>';
 }
 
-// ===== BRANCH TREND KATEGORI PER CABANG =====
-let brTrendState = {
-  selectedBranch:'', selectedCats:[], selectedMonths:[],
-  allBranches:[], allCats:[], allMonths:[]
-};
-
-function renderBranchTrendSection(){
-  const allMonths=[...new Set(filteredData.map(r=>r.Month).filter(Boolean))]
-    .sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
-  const brCounts=countBy(filteredData.map(r=>({...r,_bn:branchField(r)})),'_bn');
-  const allBranches=topN(brCounts,999).map(x=>x[0]);
-
-  const resetNeeded = brTrendState.allBranches.join()!==allBranches.join()
-    || brTrendState.allMonths.join()!==allMonths.join()
-    || !brTrendState.selectedBranch;
-
-  if(resetNeeded){
-    brTrendState.allBranches=allBranches;
-    brTrendState.allMonths=allMonths;
-    brTrendState.selectedBranch=allBranches[0]||'';
-    brTrendState.selectedMonths=[...allMonths];
-    _brTrendRefreshCats(false);
-  }
-
-  _buildBrTrendDropdowns();
-  _drawBrTrendChart();
-  _drawBrTrendTable();
-}
-
-/* rebuild allCats based on selected branch; keepSelected = try to preserve current selections */
-function _brTrendRefreshCats(keepSelected){
-  const brRows=filteredData.filter(r=>branchField(r)===brTrendState.selectedBranch);
-  const catCounts=countBy(brRows,'Category');
-  const allCats=topN(catCounts,999).map(x=>x[0]);
-  brTrendState.allCats=allCats;
-  if(keepSelected){
-    const still=brTrendState.selectedCats.filter(c=>allCats.includes(c));
-    brTrendState.selectedCats=still.length?still:allCats.slice(0,5);
-  } else {
-    brTrendState.selectedCats=allCats.slice(0,5);
-  }
-}
-
-function _buildBrTrendDropdowns(){
-  _rebuildBrTrendBranchDrop();
-  _rebuildBrTrendCatDrop();
-  _rebuildBrTrendMonDrop();
-  _updateBrTrendBadge();
-}
-
-function _rebuildBrTrendBranchDrop(){
-  const dd=document.getElementById('brTrendBrDrop'); if(!dd)return;
-  const {allBranches,selectedBranch}=brTrendState;
-  dd.innerHTML=`<div style="padding:8px 12px 4px;font-size:0.72rem;color:#64748b;font-weight:600;letter-spacing:0.04em">PILIH SATU CABANG</div>
-    <div class="ov-dd-scroll">`+
-    allBranches.map(b=>`<label class="ov-cb-row">
-      <input type="radio" name="brTrendBrRb" value="${b}" ${b===selectedBranch?'checked':''}>
-      <span>${b.length>32?b.slice(0,30)+'…':b}</span>
-    </label>`).join('')+`</div>`;
-  dd.querySelectorAll('input[name="brTrendBrRb"]').forEach(rb=>{
-    rb.onchange=()=>{
-      brTrendState.selectedBranch=rb.value;
-      _brTrendRefreshCats(false);
-      _rebuildBrTrendCatDrop();
-      _updateBrTrendBadge();
-      _drawBrTrendChart();
-      _drawBrTrendTable();
-    };
-  });
-}
-
-function _rebuildBrTrendCatDrop(){
-  const dd=document.getElementById('brTrendCatDrop'); if(!dd)return;
-  const {allCats,selectedCats}=brTrendState;
-  const allChecked=selectedCats.length===allCats.length;
-  dd.innerHTML=`<div class="ov-dd-scroll">
-    <label class="ov-cb-row"><input type="checkbox" id="brTrendAllCat" ${allChecked?'checked':''}> <span>ALL</span></label>`+
-    allCats.map(c=>`<label class="ov-cb-row">
-      <input type="checkbox" class="brTrendCatCb" value="${c}" ${selectedCats.includes(c)?'checked':''}>
-      <span>${c.length>34?c.slice(0,32)+'…':c}</span>
-    </label>`).join('')+`</div>`;
-  const allCb=document.getElementById('brTrendAllCat');
-  if(allCb) allCb.onchange=function(){
-    brTrendState.selectedCats=this.checked?[...brTrendState.allCats]:[];
-    document.querySelectorAll('.brTrendCatCb').forEach(cb=>cb.checked=this.checked);
-    _drawBrTrendChart(); _drawBrTrendTable();
-  };
-  document.querySelectorAll('.brTrendCatCb').forEach(cb=>{
-    cb.onchange=()=>{
-      brTrendState.selectedCats=Array.from(document.querySelectorAll('.brTrendCatCb:checked')).map(x=>x.value);
-      _drawBrTrendChart(); _drawBrTrendTable();
-    };
-  });
-}
-
-function _rebuildBrTrendMonDrop(){
-  const dd=document.getElementById('brTrendMonDrop'); if(!dd)return;
-  const {allMonths,selectedMonths}=brTrendState;
-  dd.innerHTML=`<div class="ov-dd-scroll">
-    <label class="ov-cb-row"><input type="checkbox" id="brTrendAllMon" ${selectedMonths.length===allMonths.length?'checked':''}> <span>ALL</span></label>`+
-    allMonths.map(m=>`<label class="ov-cb-row">
-      <input type="checkbox" class="brTrendMonCb" value="${m}" ${selectedMonths.includes(m)?'checked':''}>
-      <span>${m}</span>
-    </label>`).join('')+`</div>`;
-  const allCb=document.getElementById('brTrendAllMon');
-  if(allCb) allCb.onchange=function(){
-    brTrendState.selectedMonths=this.checked?[...brTrendState.allMonths]:[];
-    document.querySelectorAll('.brTrendMonCb').forEach(cb=>cb.checked=this.checked);
-    _drawBrTrendChart(); _drawBrTrendTable();
-  };
-  document.querySelectorAll('.brTrendMonCb').forEach(cb=>{
-    cb.onchange=()=>{
-      brTrendState.selectedMonths=Array.from(document.querySelectorAll('.brTrendMonCb:checked')).map(x=>x.value);
-      _drawBrTrendChart(); _drawBrTrendTable();
-    };
-  });
-}
-
-function _updateBrTrendBadge(){
-  const el=document.getElementById('brTrendSelectedBadge'); if(!el)return;
-  const b=brTrendState.selectedBranch;
-  if(!b){el.innerHTML='<span style="color:#64748b">— Pilih cabang dari dropdown —</span>';return;}
-  const total=filteredData.filter(r=>branchField(r)===b).length;
-  const cats=brTrendState.selectedCats.length;
-  const mons=brTrendState.selectedMonths.length;
-  el.innerHTML=`<span style="background:${PALETTE.primary}22;color:${PALETTE.primary};padding:4px 14px;border-radius:20px;font-weight:700;font-size:0.88rem">🏙️ ${b}</span>`+
-    `<span style="color:#64748b;font-size:0.78rem;margin-left:10px">Total <strong style="color:#f1f5f9">${total}</strong> tiket</span>`+
-    `<span style="color:#64748b;font-size:0.78rem;margin-left:10px">· <strong style="color:${PALETTE.cyan}">${cats}</strong> kategori</span>`+
-    `<span style="color:#64748b;font-size:0.78rem;margin-left:6px">· <strong style="color:${PALETTE.amber}">${mons}</strong> bulan</span>`;
-}
-
-function _brTrendMonths(){
-  return brTrendState.selectedMonths
-    .filter(m=>brTrendState.allMonths.includes(m))
-    .sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
-}
-
-function _drawBrTrendChart(){
-  const {selectedBranch,selectedCats}=brTrendState;
-  const months=_brTrendMonths();
-  const brRows=filteredData.filter(r=>branchField(r)===selectedBranch);
-
-  const datasets=selectedCats.map((cat,i)=>{
-    const data=months.map(m=>brRows.filter(r=>r.Month===m&&r.Category===cat).length);
-    const color=MULTI[i%MULTI.length];
-    return{
-      label:cat.length>26?cat.slice(0,24)+'…':cat,
-      data, borderColor:color, backgroundColor:color+'20',
-      tension:0.35, fill:false,
-      pointRadius:5, pointHoverRadius:8, borderWidth:2.5,
-      pointBackgroundColor:color, pointBorderColor:'#0f172a', pointBorderWidth:2,
-    };
-  });
-
-  // "Total semua kategori terpilih" dataset (dashed)
-  if(selectedCats.length>1){
-    const totalData=months.map(m=>brRows.filter(r=>r.Month===m&&selectedCats.includes(r.Category)).length);
-    datasets.push({
-      label:'▬ Total',
-      data:totalData,
-      borderColor:'#f1f5f9',
-      backgroundColor:'transparent',
-      borderWidth:1.5,
-      borderDash:[6,4],
-      tension:0.35,
-      fill:false,
-      pointRadius:3,
-      pointHoverRadius:5,
-      pointBackgroundColor:'#f1f5f9',
-    });
-  }
-
-  destroyChart('brTrend');
-  const ctx=document.getElementById('brTrendChart'); if(!ctx)return;
-  charts.brTrend=new Chart(ctx.getContext('2d'),{
-    type:'line',
-    data:{labels:months,datasets},
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{position:'top',labels:{font:{size:10},usePointStyle:true,padding:14}},
-        tooltip:{
-          callbacks:{
-            afterBody(items){
-              // exclude the Total line from sum to avoid double count
-              const sum=items.filter(i=>i.dataset.label!=='▬ Total').reduce((s,i)=>s+i.parsed.y,0);
-              return items.length>1?['──────────',`Subtotal: ${sum}`]:[];
-            }
-          }
-        }
-      },
-      scales:{
-        x:{grid:{display:false},ticks:{font:{size:11}}},
-        y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.05)'},ticks:{stepSize:1,font:{size:11}}}
-      }
-    }
-  });
-}
-
-function _drawBrTrendTable(){
-  const {selectedBranch,selectedCats}=brTrendState;
-  const months=_brTrendMonths();
-  const brRows=filteredData.filter(r=>branchField(r)===selectedBranch);
-
-  const titleEl=document.getElementById('brTrendTableTitle');
-  if(titleEl) titleEl.textContent=`📋 Detail Trend — ${selectedBranch||'…'} × Kategori × Bulan`;
-
-  const thead=document.getElementById('brTrendTableHead');
-  const tbody=document.getElementById('brTrendTableBody');
-  if(!thead||!tbody)return;
-
-  // Build header
-  thead.innerHTML=`<tr>
-    <th style="min-width:170px">Kategori</th>
-    ${months.map(m=>`<th style="text-align:right;min-width:74px">${m}</th>`).join('')}
-    <th style="text-align:right;min-width:64px">Total</th>
-    <th style="text-align:center;min-width:90px">Overall Trend</th>
-  </tr>`;
-
-  if(!selectedCats.length||!months.length){
-    tbody.innerHTML=`<tr><td colspan="${months.length+3}" style="text-align:center;color:#94a3b8;padding:24px">Pilih cabang, kategori, dan bulan di atas</td></tr>`;
-    return;
-  }
-
-  // Compute matrix: catData[i] = { cat, counts[], total, trendIcon, trendColor, trendLabel }
-  const catData=selectedCats.map(cat=>{
-    const counts=months.map(m=>brRows.filter(r=>r.Month===m&&r.Category===cat).length);
-    const total=counts.reduce((a,b)=>a+b,0);
-    // Linear regression slope to determine trend direction robustly
-    const n=counts.length;
-    let trendIcon='→',trendColor='#94a3b8',trendLabel='Stabil';
-    if(n>=2){
-      const first=counts[0], last=counts[n-1];
-      const diff=last-first;
-      // Also check overall slope
-      const sumX=counts.reduce((s,_,i)=>s+i,0);
-      const sumY=counts.reduce((s,v)=>s+v,0);
-      const sumXY=counts.reduce((s,v,i)=>s+i*v,0);
-      const sumX2=counts.reduce((s,_,i)=>s+i*i,0);
-      const slope=n>1?(n*sumXY-sumX*sumY)/(n*sumX2-sumX*sumX):0;
-      if(Math.abs(slope)<0.1&&diff===0){trendIcon='→';trendColor='#94a3b8';trendLabel='Stabil';}
-      else if(slope>0){trendIcon='↑';trendColor='#f43f5e';trendLabel=`${diff>=0?'+':''}${diff} (Naik)`;}
-      else{trendIcon='↓';trendColor='#10b981';trendLabel=`${diff} (Turun)`;}
-    }
-    return{cat,counts,total,trendIcon,trendColor,trendLabel};
-  }).sort((a,b)=>b.total-a.total);
-
-  // Column max per month (for heat intensity)
-  const colMax=months.map((_,mi)=>Math.max(1,...catData.map(r=>r.counts[mi])));
-  // Column totals
-  const colTotals=months.map((_,mi)=>catData.reduce((s,r)=>s+r.counts[mi],0));
-  const grandTotal=colTotals.reduce((a,b)=>a+b,0);
-
-  // Render rows
-  const rows=catData.map(row=>{
-    const cells=row.counts.map((val,mi)=>{
-      // mom change indicator
-      let momEl='';
-      if(mi>0){
-        const d=val-row.counts[mi-1];
-        if(d>0) momEl=`<span style="color:#f43f5e;font-size:0.68rem;margin-left:2px">↑${d}</span>`;
-        else if(d<0) momEl=`<span style="color:#10b981;font-size:0.68rem;margin-left:2px">↓${Math.abs(d)}</span>`;
-      }
-      const intensity=val/colMax[mi];
-      const bg=val>0?`rgba(99,102,241,${(intensity*0.32).toFixed(2)})`:'';
-      return `<td style="text-align:right;${bg?`background:${bg};`:''}border-radius:3px;padding:6px 10px">
-        <strong style="color:${val>0?'#f1f5f9':'#334155'}">${val}</strong>${momEl}
-      </td>`;
-    }).join('');
-    return `<tr>
-      <td style="padding:6px 10px">
-        <span style="background:${PALETTE.primary}1a;color:${PALETTE.primary};padding:2px 9px;border-radius:12px;font-size:0.78rem;white-space:nowrap;display:inline-block;max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${row.cat}">${row.cat}</span>
-      </td>
-      ${cells}
-      <td style="text-align:right;font-weight:700;color:${PALETTE.amber};padding:6px 10px">${row.total}</td>
-      <td style="text-align:center;padding:6px 10px">
-        <span style="font-size:1rem;font-weight:800;color:${row.trendColor}">${row.trendIcon}</span>
-        <span style="font-size:0.72rem;color:${row.trendColor};margin-left:3px">${row.trendLabel}</span>
-      </td>
-    </tr>`;
-  }).join('');
-
-  // Total footer row
-  const footerCells=colTotals.map((t,mi)=>{
-    let momEl='';
-    if(mi>0){const d=t-colTotals[mi-1];
-      if(d>0) momEl=`<span style="color:#f43f5e;font-size:0.68rem;margin-left:2px">↑${d}</span>`;
-      else if(d<0) momEl=`<span style="color:#10b981;font-size:0.68rem;margin-left:2px">↓${Math.abs(d)}</span>`;
-    }
-    return `<td style="text-align:right;font-weight:700;color:#f1f5f9;border-top:1px solid rgba(255,255,255,0.1);padding:7px 10px">${t}${momEl}</td>`;
-  }).join('');
-
-  tbody.innerHTML=rows+`<tr style="background:rgba(255,255,255,0.03)">
-    <td style="font-weight:700;color:#f1f5f9;border-top:1px solid rgba(255,255,255,0.1);padding:7px 10px">Total</td>
-    ${footerCells}
-    <td style="text-align:right;font-weight:800;color:${PALETTE.emerald};border-top:1px solid rgba(255,255,255,0.1);padding:7px 10px">${grandTotal}</td>
-    <td style="border-top:1px solid rgba(255,255,255,0.1)"></td>
-  </tr>`;
-}
-
 // ===== TAG SECTION =====
 function renderTagSection(){
   const withTag=filteredTagData.filter(r=>r.Tag&&r.Tag.trim()!=='');
@@ -1477,39 +1183,97 @@ function renderDDTable(branchDD){
   }).join('');
 }
 
-// FIX #6: Best branch patokannya branch dari Data_Source, dipetakan ke DD_SimFast
-function renderDDBestBranchChart(branchDD){
-  // Gunakan branch dari Data_Source sebagai patokan
-  const issueBranchCounts=countBy(filteredData.map(r=>({...r,_bn:branchField(r)})),'_bn');
-  const allIssueBranches=Object.keys(issueBranchCounts).filter(b=>b&&b!=='Unknown');
+// canonBranch: normalisasi nama cabang untuk matching konsisten lintas sheet
+function canonBranch(name){
+  return (name||'').toUpperCase()
+    .replace(/^MUF[-\s]+/,'')
+    .replace(/\bCAB\.?\s*/g,'')
+    .replace(/\bKC\.?\s*/g,'')
+    .replace(/\bKCP\.?\s*/g,'')
+    .replace(/\bSYARIAH\b/g,'')
+    .replace(/[-_]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
 
-  const allBranchData=allIssueBranches.map(issueBranch=>{
-    const issueCount=issueBranchCounts[issueBranch]||0;
-    // Cari drawdown yang cocok (exact atau fuzzy)
-    const nb=normBranch(issueBranch);
-    let ddCount=branchDD[issueBranch]||0;
-    if(ddCount===0){
-      // try fuzzy
-      const ddBranchKey=Object.keys(branchDD).find(b=>matchBranches(b,issueBranch));
-      if(ddBranchKey)ddCount=branchDD[ddBranchKey]||0;
-    }
-    if(ddCount===0)return null; // tidak punya drawdown, skip
+// FIX #6: Best branch — pakai canonBranch agar nama "Tasikmalaya" / "CAB TASIKMALAYA" / "MUF-Cab Tasikmalaya" dihitung sama
+function renderDDBestBranchChart(branchDD){
+  // Aggregasi issue per canonical name
+  const canonIssueCounts={};
+  const canonDisplayName={};
+  filteredData.forEach(r=>{
+    const raw=branchField(r); if(!raw)return;
+    const canon=canonBranch(raw);
+    if(!canonDisplayName[canon])canonDisplayName[canon]=raw;
+    canonIssueCounts[canon]=(canonIssueCounts[canon]||0)+1;
+  });
+
+  // Aggregasi DD per canonical name
+  const canonDDCounts={};
+  Object.entries(branchDD).forEach(([ddBr,cnt])=>{
+    const canon=canonBranch(ddBr);
+    if(canon) canonDDCounts[canon]=(canonDDCounts[canon]||0)+cnt;
+  });
+
+  // Gabungkan — hanya cabang yang punya DD
+  const allBranchData=Object.entries(canonIssueCounts).map(([canon,issueCount])=>{
+    const ddCount=canonDDCounts[canon]||0;
+    if(ddCount===0)return null;
     const ratio=issueCount/ddCount;
-    return{branch:issueBranch,ddCount,issueCount,ratio};
+    return{branch:canonDisplayName[canon]||canon,ddCount,issueCount,ratio};
   }).filter(Boolean);
 
-  // Sort: rasio terkecil dulu, jika sama → DD terbanyak dulu
+  // Sort: rasio terkecil dulu (paling sehat); sama → DD terbanyak
   const best20=allBranchData.sort((a,b)=>a.ratio!==b.ratio?a.ratio-b.ratio:b.ddCount-a.ddCount).slice(0,20);
 
+  // Plugin: label rasio di sebelah kanan bar terpanjang
+  const ratioLabelPlugin={
+    id:'ratioRightLabel',
+    afterDraw(chart){
+      const ctx=chart.ctx;
+      const xScale=chart.scales.x;
+      best20.forEach((row,i)=>{
+        const xPx=xScale.getPixelForValue(Math.max(row.ddCount,row.issueCount));
+        const meta=chart.getDatasetMeta(0);
+        if(!meta.data[i])return;
+        const yPx=meta.data[i].y;
+        const rn=row.ratio;
+        const color=rn===0?'#10b981':rn<0.05?'#10b981':rn<0.15?'#f59e0b':'#f43f5e';
+        ctx.save();
+        ctx.font='bold 10px Inter,sans-serif';
+        ctx.fillStyle=color;
+        ctx.textAlign='left';
+        ctx.textBaseline='middle';
+        ctx.fillText(`1:${rn.toFixed(2)}`,xPx+8,yPx);
+        ctx.restore();
+      });
+    }
+  };
+
   destroyChart('ddBestBranch');
-  charts.ddBestBranch=new Chart(document.getElementById('ddBestBranchChart').getContext('2d'),{type:'bar',
+  charts.ddBestBranch=new Chart(document.getElementById('ddBestBranchChart').getContext('2d'),{
+    type:'bar',
+    plugins:[ratioLabelPlugin],
     data:{labels:best20.map(x=>x.branch),datasets:[
       {label:'MUF-Drawdown',data:best20.map(x=>x.ddCount),backgroundColor:PALETTE.emerald+'99',borderColor:PALETTE.emerald,borderWidth:2,borderRadius:4},
       {label:'Issue/Tiket',data:best20.map(x=>x.issueCount),backgroundColor:PALETTE.rose+'99',borderColor:PALETTE.rose,borderWidth:2,borderRadius:4}
     ]},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
-      plugins:{legend:{position:'top'},tooltip:{callbacks:{afterBody(items){const idx=items[0].dataIndex;const row=best20[idx];return[`Rasio: 1 DD : ${row.ratio.toFixed(2)} issue`];}}}},
-      scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
+    options:{
+      responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      layout:{padding:{right:70}},
+      plugins:{
+        legend:{position:'top'},
+        tooltip:{callbacks:{afterBody(items){
+          const idx=items[0].dataIndex;const row=best20[idx];
+          return[`Rasio Issue/DD: 1 : ${row.ratio.toFixed(2)}`];
+        }}}
+      },
+      scales:{
+        x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},
+        y:{grid:{display:false},ticks:{font:{size:11}}}
+      }
+    }
+  });
 
   const medals=['🥇','🥈','🥉'];
   document.getElementById('ddBestTableBody').innerHTML=best20.map((row,i)=>{
@@ -1519,9 +1283,9 @@ function renderDDBestBranchChart(branchDD){
     return`<tr>
       <td style="font-size:1.1rem">${medals[i]||`#${i+1}`}</td>
       <td><strong>${row.branch}</strong></td>
-      <td><span style="color:${PALETTE.emerald};font-weight:700">${row.ddCount}</span></td>
-      <td><span style="color:${PALETTE.rose};font-weight:700">${row.issueCount}</span></td>
-      <td><span class="${cls}" style="white-space:nowrap">1 : ${rn.toFixed(2)}</span></td>
+      <td style="text-align:right"><span style="color:${PALETTE.emerald};font-weight:700">${row.ddCount}</span></td>
+      <td style="text-align:right"><span style="color:${PALETTE.rose};font-weight:700">${row.issueCount}</span></td>
+      <td><span class="${cls}" style="white-space:nowrap;font-weight:700">1 : ${rn.toFixed(2)}</span></td>
       <td style="font-size:0.82rem">${perf}</td>
     </tr>`;
   }).join('');
