@@ -78,11 +78,6 @@ Chart.defaults.plugins.tooltip.padding = 10;
 Chart.defaults.plugins.tooltip.titleColor = '#f1f5f9';
 Chart.defaults.plugins.tooltip.bodyColor = '#94a3b8';
 
-filterProduct.addEventListener('change', applyGlobalFilters);
-Chart.defaults.plugins.tooltip.borderWidth = 1;
-Chart.defaults.plugins.tooltip.padding = 10;
-Chart.defaults.plugins.tooltip.titleColor = '#f1f5f9';
-Chart.defaults.plugins.tooltip.bodyColor = '#94a3b8';
 Chart.defaults.plugins.tooltip.cornerRadius = 8;
 
 const PALETTE = {
@@ -144,6 +139,9 @@ sidebarToggleEl.addEventListener('click', () => {
   mainEl.classList.toggle('sidebar-collapsed');
 });
 mobileMenuBtn.addEventListener('click', () => sidebarEl.classList.toggle('mobile-open'));
+
+// Filter listeners
+filterProduct.addEventListener('change', applyGlobalFilters);
 
 // ===== NAVIGATION =====
 const navItems = document.querySelectorAll('.nav-item');
