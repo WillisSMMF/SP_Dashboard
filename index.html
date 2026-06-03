@@ -164,18 +164,36 @@
         </div>
         <div class="charts-row">
           <div class="chart-card chart-lg"><div class="chart-header"><h3>Tren Tiket per Bulan</h3><p style="color:#94a3b8;font-size:0.75rem;margin-top:2px">Bar = total · Garis putus = rata-rata · Label % = perubahan bulan ke bulan</p></div><div class="chart-body" style="height:280px"><canvas id="trendChart"></canvas></div></div>
-          <div class="chart-card chart-sm" style="flex:0.75;min-width:220px">
-            <div class="chart-header"><h3>Status Tiket</h3></div>
-            <div style="padding:6px 4px;overflow-y:auto">
-              <table class="data-table" style="font-size:0.81rem;width:100%">
-                <thead><tr>
-                  <th style="width:12px;padding:6px 4px"></th>
-                  <th style="padding:6px 8px">Status</th>
-                  <th style="text-align:right;padding:6px 8px">Tiket</th>
-                  <th style="text-align:right;padding:6px 8px;min-width:90px">Porsi</th>
-                </tr></thead>
-                <tbody id="statusTableBody"></tbody>
-              </table>
+          <div style="display:flex;flex-direction:column;gap:16px;flex:0.75;min-width:220px">
+            <!-- Status Table -->
+            <div class="chart-card" style="padding:0">
+              <div class="chart-header" style="padding:14px 16px 10px"><h3>Status Tiket</h3></div>
+              <div style="padding:0 4px 8px;overflow-y:auto">
+                <table class="data-table" style="font-size:0.81rem;width:100%">
+                  <thead><tr>
+                    <th style="width:12px;padding:6px 4px"></th>
+                    <th style="padding:6px 8px">Status</th>
+                    <th style="text-align:right;padding:6px 8px">Tiket</th>
+                    <th style="text-align:right;padding:6px 8px;min-width:88px">Porsi</th>
+                  </tr></thead>
+                  <tbody id="statusTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <!-- Month Breakdown Table -->
+            <div class="chart-card" style="padding:0">
+              <div class="chart-header" style="padding:14px 16px 10px"><h3>📅 Tren Bulanan</h3></div>
+              <div style="padding:0 4px 8px;overflow-y:auto;max-height:260px">
+                <table class="data-table" style="font-size:0.8rem;width:100%">
+                  <thead><tr>
+                    <th style="padding:6px 8px">Bulan</th>
+                    <th style="text-align:right;padding:6px 6px">Tiket</th>
+                    <th style="text-align:right;padding:6px 6px" title="Rata-rata keseluruhan">Avg</th>
+                    <th style="text-align:right;padding:6px 8px" title="Perubahan vs bulan sebelumnya">MoM</th>
+                  </tr></thead>
+                  <tbody id="monthBreakdownBody"></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -275,7 +293,11 @@
           <div class="kpi-card kpi-sla"><div class="kpi-icon">🏆</div><div class="kpi-info"><div class="kpi-value" id="ddTopBranch">-</div><div class="kpi-label">Cabang #1 Drawdown</div></div></div>
         </div>
         <div class="charts-row">
-          <div class="chart-card" style="flex:1"><div class="chart-header"><h3>Top 20 Cabang: MUF-Drawdown vs Issue</h3></div><div class="chart-body chart-body-tall" style="height:460px"><canvas id="ddVsIssueChart"></canvas></div></div>
+          <div class="chart-card" style="flex:1">
+            <div class="chart-header"><h3>Top Cabang Drawdown vs Issue</h3><p style="color:#94a3b8;font-size:0.75rem;margin-top:2px">Diurutkan DD terbanyak · Maks 20/halaman</p></div>
+            <div class="chart-body chart-body-tall" id="ddVsIssueChartWrap" style="height:460px"><canvas id="ddVsIssueChart"></canvas></div>
+            <div id="ddVsIssuePager"></div>
+          </div>
         </div>
         <div class="charts-row">
           <div class="chart-card chart-lg"><div class="chart-header"><h3>Tren Drawdown per Bulan vs Total Aplikasi</h3></div><div class="chart-body"><canvas id="ddMonthChart"></canvas></div></div>
@@ -284,56 +306,62 @@
         <!-- DD Table — kolom baru: Rasio 1:X, Issue Terbesar, Tag Terbanyak -->
         <div class="chart-card" style="margin-top:0">
           <div class="chart-header" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
-            <h3>Detail Top 20 Cabang — Drawdown vs Issue</h3>
+            <h3>Detail Top Cabang — Drawdown vs Issue</h3>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="export-btn" id="exportDDCSV" style="padding:6px 14px;font-size:0.78rem">📄 Export CSV</button>
               <button class="export-btn" id="exportDDXLSX" style="padding:6px 14px;font-size:0.78rem">📊 Export XLSX</button>
             </div>
           </div>
           <div class="table-container" style="max-height:420px">
-            <table class="data-table">
+            <table class="data-table" style="font-size:0.82rem">
               <thead><tr>
-                <th style="width:50px">Rank</th>
+                <th style="width:40px">No</th>
                 <th>Cabang</th>
-                <th>Drawdown</th>
-                <th>Issue</th>
-                <th>Rasio Issue <span style="font-weight:400;color:#94a3b8;font-size:0.72rem">(1 DD : X issue)</span></th>
-                <th>Issue Terbesar</th>
-                <th>Tag Terbanyak</th>
+                <th style="text-align:right">DD</th>
+                <th style="text-align:right" title="Drawdown / Total Aplikasi">Rasio DD</th>
+                <th style="text-align:right">Issue</th>
+                <th style="text-align:right" title="Issue / Drawdown">Rasio Issue</th>
+                <th style="min-width:120px">Issue Terbesar</th>
+                <th style="min-width:110px">Tag Terbanyak</th>
               </tr></thead>
               <tbody id="ddTableBody"></tbody>
             </table>
           </div>
+          <div id="ddTablePager"></div>
         </div>
         <!-- Best Branch: Chart + Table side by side -->
         <div class="charts-row" style="margin-top:24px;align-items:flex-start">
           <!-- Chart kiri -->
           <div class="chart-card" style="flex:1.5;min-width:300px">
             <div class="chart-header"><div>
-              <h3>🏆 Top 20 Best Cabang: MUF-Drawdown vs Issue</h3>
-              <p style="color:#94a3b8;font-size:0.78rem;margin-top:4px">Rasio terkecil = paling efisien · Label % = rasio issue/DD</p>
+              <h3>🏅 Top Best Cabang DD vs Issue</h3>
+              <p style="color:#94a3b8;font-size:0.78rem;margin-top:4px">Rasio terkecil = paling efisien · Label % = rasio issue/DD · Maks 20/halaman</p>
             </div></div>
-            <div class="chart-body" style="height:540px"><canvas id="ddBestBranchChart"></canvas></div>
+            <div id="ddBestChartWrap" style="height:540px"><canvas id="ddBestBranchChart"></canvas></div>
+            <div id="ddBestChartPager"></div>
           </div>
           <!-- Tabel kanan -->
           <div class="chart-card" style="flex:0.65;min-width:220px">
             <div class="chart-header" style="margin-bottom:10px">
               <div>
-                <h3>🏅 Top 20 Best Cabang</h3>
-                <p style="color:#94a3b8;font-size:0.75rem;margin-top:3px">Hover ★ untuk detail · Rasio = issue/DD</p>
+                <h3>🏅 Detail Top Best Cabang</h3>
+                <p style="color:#94a3b8;font-size:0.75rem;margin-top:3px">Hover ★ untuk detail lengkap</p>
               </div>
             </div>
-            <div class="table-container" style="max-height:540px">
+            <div class="table-container" style="max-height:480px">
               <table class="data-table" style="font-size:0.82rem">
                 <thead><tr>
-                  <th style="width:28px;text-align:center">#</th>
+                  <th style="width:24px;text-align:center">#</th>
                   <th>Cabang</th>
-                  <th style="text-align:right;white-space:nowrap">Rasio</th>
-                  <th style="text-align:center">Performa</th>
+                  <th style="text-align:right">DD</th>
+                  <th style="text-align:right">Issue</th>
+                  <th style="text-align:right">Rasio</th>
+                  <th style="text-align:center">Perf.</th>
                 </tr></thead>
                 <tbody id="ddBestTableBody"></tbody>
               </table>
             </div>
+            <div id="ddBestTablePager"></div>
           </div>
         </div>
       </section>
@@ -346,7 +374,7 @@
         </div>
         <div class="table-toolbar">
           <div class="search-wrap"><span class="search-icon">🔍</span>
-            <input type="text" id="tableSearch" placeholder="Cari tiket, summary, branch..." class="search-input" /></div>
+            <input type="text" id="tableSearch" placeholder="Cari multi-kata dipisah koma, mis: Bogor,Pointing" class="search-input" /></div>
           <div class="filter-group">
             <select id="tableStatus" class="filter-select">
               <option value="">Semua Status</option>

@@ -193,25 +193,40 @@ function populateFilters(){
 
 function _buildMonthChecklist(allMonthKeys){
   const panel=document.getElementById('filterMonthPanel'); if(!panel)return;
-  const selAll=filterState.months.length===0||filterState.months.length===allMonthKeys.length;
-  panel.innerHTML=`<div class="ov-dd-scroll" style="max-height:280px">
-    <label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:4px">
-      <input type="checkbox" id="fmAllCb" ${selAll?'checked':''}> <span style="font-weight:600">Semua Bulan</span>
+  panel.innerHTML=`<div class="ov-dd-scroll" style="max-height:300px">
+    <label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px;padding-bottom:6px">
+      <input type="checkbox" id="fmAllCb" checked> <span style="font-weight:700">Semua Bulan</span>
     </label>`+
     allMonthKeys.map(k=>`<label class="ov-cb-row">
-      <input type="checkbox" class="fmCb" value="${k}" ${filterState.months.length===0||filterState.months.includes(k)?'checked':''}>
+      <input type="checkbox" class="fmCb" value="${k}" checked>
       <span>${k}</span>
     </label>`).join('')+`</div>`;
+
   document.getElementById('fmAllCb').onchange=function(){
-    filterState.months=this.checked?[]:[];
-    document.querySelectorAll('.fmCb').forEach(cb=>cb.checked=this.checked);
+    if(this.checked){
+      // Klik "Semua Bulan" ON → pilih semua, clear filter
+      filterState.months=[];
+      document.querySelectorAll('.fmCb').forEach(cb=>cb.checked=true);
+    } else {
+      // Klik "Semua Bulan" OFF → uncheck semua individual
+      filterState.months=[];
+      document.querySelectorAll('.fmCb').forEach(cb=>cb.checked=false);
+    }
     _updateMonthLabel(allMonthKeys); applyGlobalFilters();
   };
   document.querySelectorAll('.fmCb').forEach(cb=>{
     cb.onchange=()=>{
-      filterState.months=Array.from(document.querySelectorAll('.fmCb:checked')).map(x=>x.value);
-      const allCb=document.getElementById('fmAllCb');
-      if(allCb) allCb.checked=filterState.months.length===allMonthKeys.length;
+      const checked=Array.from(document.querySelectorAll('.fmCb:checked')).map(x=>x.value);
+      if(checked.length===0){
+        // Tidak ada yg dipilih → reset ke semua
+        filterState.months=[];
+        document.querySelectorAll('.fmCb').forEach(c=>c.checked=true);
+        const allCb=document.getElementById('fmAllCb'); if(allCb)allCb.checked=true;
+      } else {
+        // Ada yg dipilih — simpan, JANGAN auto-check "Semua Bulan"
+        filterState.months=checked.length===allMonthKeys.length?[]:checked;
+        // "Semua Bulan" checkbox: tidak diubah otomatis
+      }
       _updateMonthLabel(allMonthKeys); applyGlobalFilters();
     };
   });
@@ -288,9 +303,12 @@ function applyGlobalFilters(){
     if(selMonths.length){
       const d=parseDDDate(r['Submit Date']);
       if(!d)return false;
-      // Match year+month key against selMonths
       const k=d.year?`${d.year} ${d.month}`:d.month;
       if(!selMonths.includes(k))return false;
+    }
+    if(selBranches.length){
+      const ddCanon=canonBranch(r['Branch Name']||'');
+      if(!selBranches.some(b=>canonBranch(b)===ddCanon))return false;
     }
     return true;
   });
@@ -413,7 +431,7 @@ function renderOverview(){
   document.getElementById('kpi-total').onclick=()=>{tableFilter.status='';navigateTo('tickets','');};
   document.getElementById('kpi-resolved').onclick=()=>{tableFilter.status='resolved';navigateTo('tickets','resolved');};
   document.getElementById('kpi-open').onclick=()=>{tableFilter.status='__open__';navigateTo('tickets','__open__');};
-  renderTrendChart(); renderStatusTable(); renderCategoryChart(); renderRootCauseChart(); renderProductChart();
+  renderTrendChart(); renderStatusTable(); renderMonthBreakdownTable(); renderCategoryChart(); renderRootCauseChart(); renderProductChart();
 }
 
 function renderTrendChart(){
@@ -515,6 +533,37 @@ function renderStatusTable(){
     </tr>`;
   }).join('');
 }
+
+function renderMonthBreakdownTable(){
+  const el=document.getElementById('monthBreakdownBody'); if(!el)return;
+  const monthKeyMap={};
+  filteredData.forEach(r=>{const k=getRowMonthKey(r);if(k)monthKeyMap[k]=r.Month;});
+  const sortedKeys=Object.keys(monthKeyMap).sort((a,b)=>{
+    const parse=s=>{const p=s.split(' ');const yr=p.length>1?parseInt(p[0]):9999;const mo=MONTH_ORDER.indexOf(p[p.length-1]);return yr*100+mo;};
+    return parse(a)-parse(b);
+  });
+  if(!sortedKeys.length){el.innerHTML='<tr><td colspan="4" style="text-align:center;color:#64748b;padding:10px">-</td></tr>';return;}
+  const counts=sortedKeys.map(k=>filteredData.filter(r=>getRowMonthKey(r)===k).length);
+  const mean=counts.reduce((a,b)=>a+b,0)/counts.length;
+  el.innerHTML=sortedKeys.map((k,i)=>{
+    const count=counts[i];
+    const prev=i>0?counts[i-1]:null;
+    let momHtml='<span style="color:#475569">—</span>';
+    if(prev!==null&&prev>0){
+      const pct=((count-prev)/prev*100).toFixed(1);
+      const sign=count>prev?'+':'';
+      const c=count>prev?'#f43f5e':count<prev?'#10b981':'#94a3b8';
+      momHtml=`<span style="color:${c};font-weight:600;white-space:nowrap">${sign}${pct}%</span>`;
+    }
+    const avgColor=count>mean?'#f43f5e':'#10b981';
+    return`<tr>
+      <td style="padding:5px 8px;white-space:nowrap;font-size:0.78rem">${k}</td>
+      <td style="text-align:right;font-weight:700;color:#f1f5f9;padding:5px 6px">${count}</td>
+      <td style="text-align:right;font-size:0.77rem;color:${avgColor};padding:5px 6px">${mean.toFixed(1)}</td>
+      <td style="text-align:right;padding:5px 8px">${momHtml}</td>
+    </tr>`;
+  }).join('');
+}
 function renderCategoryChart(){
   const top=topN(countBy(filteredData,'Category'),10);
   destroyChart('category');
@@ -549,7 +598,13 @@ document.getElementById('ticketTable').addEventListener('click',e=>{
 
 function renderTicketTable(){
   let data=[...filteredData];
-  if(tableFilter.search)data=data.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(tableFilter.search)));
+  if(tableFilter.search){
+    const terms=tableFilter.search.split(',').map(t=>t.trim().toLowerCase()).filter(Boolean);
+    if(terms.length) data=data.filter(r=>{
+      const vals=Object.values(r).map(v=>String(v).toLowerCase());
+      return terms.every(term=>vals.some(v=>v.includes(term)));
+    });
+  }
   if(tableFilter.status==='__open__')data=data.filter(r=>!['resolved','closed'].includes((r.Status||'').toLowerCase()));
   else if(tableFilter.status)data=data.filter(r=>(r.Status||'').toLowerCase()===tableFilter.status.toLowerCase());
   if(tableFilter.rootCause)data=data.filter(r=>r['Root Cause']===tableFilter.rootCause);
@@ -1258,6 +1313,29 @@ function getTagRowsForDDBranch(ddBranchName){
   return filteredTagData.filter(r=>canonBranch(r['Branch Name']||r['Branch']||'')===canon);
 }
 
+// ===== PAGER HELPER =====
+const DD_PAGE=20;
+let _ddVsIssuePage=1, _ddTablePage=1, _ddBestPage=1;
+let _ddVsIssueBranchDD={}, _ddTableBranchDD={}, _ddBestBranchDD={};
+
+function _renderPager(elId,cur,total,onGo){
+  const el=document.getElementById(elId); if(!el)return;
+  if(total<=1){el.innerHTML='';return;}
+  let pagesHtml='';
+  for(let p=1;p<=total;p++){
+    pagesHtml+=`<button data-p="${p}" style="background:${p===cur?PALETTE.primary:'rgba(255,255,255,0.07)'};border:none;color:#f1f5f9;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:0.78rem;font-weight:${p===cur?700:400}">${p}</button>`;
+  }
+  el.innerHTML=`<div style="display:flex;gap:5px;align-items:center;justify-content:center;padding:8px 0;flex-wrap:wrap">
+    <button data-dir="prev" style="background:rgba(255,255,255,0.07);border:none;color:${cur>1?'#f1f5f9':'#475569'};padding:4px 10px;border-radius:5px;cursor:${cur>1?'pointer':'default'};font-size:0.78rem">‹</button>
+    ${pagesHtml}
+    <button data-dir="next" style="background:rgba(255,255,255,0.07);border:none;color:${cur<total?'#f1f5f9':'#475569'};padding:4px 10px;border-radius:5px;cursor:${cur<total?'pointer':'default'};font-size:0.78rem">›</button>
+    <span style="color:#64748b;font-size:0.75rem">hal ${cur}/${total}</span>
+  </div>`;
+  el.querySelectorAll('button[data-p]').forEach(b=>b.onclick=()=>onGo(parseInt(b.dataset.p)));
+  const prev=el.querySelector('button[data-dir="prev"]'); if(prev&&cur>1)prev.onclick=()=>onGo(cur-1);
+  const next=el.querySelector('button[data-dir="next"]'); if(next&&cur<total)next.onclick=()=>onGo(cur+1);
+}
+
 function renderDrawdownSection(){
   const drawdowns=filteredDDData.filter(r=>r.Status==='MUF-Drawdown');
   if(filteredDDData.length===0)return;
@@ -1274,15 +1352,25 @@ function renderDrawdownSection(){
   renderDDVsIssueChart(branchDD);
   renderDDMonthChart();
   renderDDStatusChart();
-  renderDDTable(branchDD);       // FIX #4 #5
-  renderDDBestBranchChart(branchDD); // FIX #6
+  renderDDTable(branchDD);
+  renderDDBestBranchChart(branchDD);
+  // store for paging
+  _ddVsIssueBranchDD=branchDD; _ddTableBranchDD=branchDD; _ddBestBranchDD=branchDD;
+  _ddVsIssuePage=1; _ddTablePage=1; _ddBestPage=1;
 }
 
 function renderDDVsIssueChart(branchDD){
-  const top20=Object.entries(branchDD).sort((a,b)=>b[1]-a[1]).slice(0,20);
-  const labels=top20.map(x=>x[0]);
-  const ddCounts=top20.map(x=>x[1]);
+  const all=Object.entries(branchDD).sort((a,b)=>b[1]-a[1]);
+  const totalPages=Math.ceil(all.length/DD_PAGE);
+  const _page=Math.min(_ddVsIssuePage,totalPages||1);
+  const page=all.slice((_page-1)*DD_PAGE, _page*DD_PAGE);
+  const labels=page.map(x=>x[0]);
+  const ddCounts=page.map(x=>x[1]);
   const issueCounts=labels.map(b=>getIssueCountForDDBranch(b));
+  // Dynamic height: 28px per row min 300px
+  const h=Math.max(300,page.length*30);
+  const wrap=document.getElementById('ddVsIssueChartWrap');
+  if(wrap)wrap.style.height=h+'px';
   destroyChart('ddVsIssue');
   charts.ddVsIssue=new Chart(document.getElementById('ddVsIssueChart').getContext('2d'),{type:'bar',
     data:{labels,datasets:[
@@ -1291,9 +1379,11 @@ function renderDDVsIssueChart(branchDD){
     ]},
     options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
       plugins:{legend:{position:'top'},
-        tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8'}
+        tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8',
+          callbacks:{afterBody(items){const i=items[0].dataIndex;const dd=ddCounts[i],iss=issueCounts[i];const r=dd>0?(iss/dd*100).toFixed(1):'0';return[`Rasio: ${r}% (${iss} issue / ${dd} DD)`];}}}
       },
       scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
+  _renderPager('ddVsIssuePager',_page,totalPages,p=>{_ddVsIssuePage=p;renderDDVsIssueChart(_ddVsIssueBranchDD);});
 }
 
 function renderDDMonthChart(){
@@ -1322,40 +1412,48 @@ function renderDDStatusChart(){
     options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}});
 }
 
-// FIX #4: Rasio format "1 DD : X issue" (2 desimal)
-// FIX #5: Tambahkan kolom Issue Terbesar & Tag Terbanyak
 function renderDDTable(branchDD){
-  const top20=Object.entries(branchDD).sort((a,b)=>b[1]-a[1]).slice(0,20);
-  const tableData=top20.map(([branch,ddCount],i)=>{
+  // Hitung total aplikasi per cabang (semua status dari filteredDDData)
+  const totalAppByBranch={};
+  filteredDDData.forEach(r=>{const b=(r['Branch Name']||'Unknown').trim();totalAppByBranch[b]=(totalAppByBranch[b]||0)+1;});
+
+  const all=Object.entries(branchDD).sort((a,b)=>b[1]-a[1]);
+  const totalPages=Math.ceil(all.length/DD_PAGE);
+  const _page=Math.min(_ddTablePage,totalPages||1);
+  const start=(_page-1)*DD_PAGE;
+  const pageData=all.slice(start,start+DD_PAGE);
+
+  const tableData=pageData.map(([branch,ddCount],i)=>{
     const issueRows=getIssueRowsForDDBranch(branch);
     const issueCount=issueRows.length;
-    // FIX #4: rasio = issue/dd, format "1 : X.XX"
     const ratioNum=ddCount>0?issueCount/ddCount:0;
-    const ratioStr=`1 : ${ratioNum.toFixed(2)}`;
-    // FIX #5: Top category
+    const ratioPct=`${(ratioNum*100).toFixed(1)}%`;
     const catCount=countBy(issueRows,'Category');
     const topCat=topN(catCount,1)[0];
     const topCatStr=topCat?`${topCat[0]} (${topCat[1]})`:'—';
-    // FIX #5: Top tag
     const tagRows=getTagRowsForDDBranch(branch);
     const tagCount=countBy(tagRows.filter(r=>r.Tag&&r.Tag.trim()!==''),'Tag');
     const topTag=topN(tagCount,1)[0];
     const topTagStr=topTag?`${topTag[0]} (${topTag[1]})`:'—';
-    return{rank:i+1,branch,ddCount,issueCount,ratioStr,ratioNum,topCatStr,topTagStr};
+    const totalApp=totalAppByBranch[branch]||ddCount;
+    const ratioDDPct=totalApp>0?`${(ddCount/totalApp*100).toFixed(1)}%`:'—';
+    return{rank:start+i+1,branch,ddCount,issueCount,ratioPct,ratioNum,topCatStr,topTagStr,ratioDDPct};
   });
   window._ddTableData=tableData;
   document.getElementById('ddTableBody').innerHTML=tableData.map(row=>{
     const cls=row.ratioNum>0.3?'sla-bad':row.ratioNum>0.1?'sla-warn':'sla-good';
     return`<tr>
-      <td><strong style="color:${PALETTE.primary}">#${row.rank}</strong></td>
-      <td><strong>${row.branch}</strong></td>
-      <td><span style="color:${PALETTE.emerald};font-weight:700">${row.ddCount}</span></td>
-      <td><span style="color:${PALETTE.rose};font-weight:700">${row.issueCount}</span></td>
-      <td><span class="${cls}" style="white-space:nowrap">${row.ratioStr}</span></td>
-      <td style="font-size:0.78rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.topCatStr}">${row.topCatStr}</td>
-      <td style="font-size:0.78rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.topTagStr}">${row.topTagStr}</td>
+      <td style="text-align:center;color:#64748b;font-size:0.78rem">${row.rank}</td>
+      <td style="font-size:0.81rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.branch}"><strong>${row.branch}</strong></td>
+      <td style="text-align:right"><span style="color:${PALETTE.emerald};font-weight:700">${row.ddCount}</span></td>
+      <td style="text-align:right;color:#94a3b8;font-size:0.8rem">${row.ratioDDPct}</td>
+      <td style="text-align:right"><span style="color:${PALETTE.rose};font-weight:700">${row.issueCount}</span></td>
+      <td style="text-align:right"><span class="${cls}" style="white-space:nowrap;font-weight:700">${row.ratioPct}</span></td>
+      <td style="font-size:0.77rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.topCatStr}">${row.topCatStr}</td>
+      <td style="font-size:0.77rem;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.topTagStr}">${row.topTagStr}</td>
     </tr>`;
   }).join('');
+  _renderPager('ddTablePager',_page,totalPages,p=>{_ddTablePage=p;renderDDTable(_ddTableBranchDD);});
 }
 
 // ── helpers stars ─────────────────────────────────────────────────────
@@ -1375,7 +1473,6 @@ function _ddStarHtml(stars,row){
   return `<span class="star-tip" data-tip="${tip}" style="color:${color};font-size:1rem;letter-spacing:1px">${filled}</span>`;
 }
 
-// FIX #6 FINAL: Best branch — canonBranch aggregasi, label %, tooltip solid, tabel compact
 function renderDDBestBranchChart(branchDD){
   // Aggregasi issue per canonical name (gabungkan varian nama)
   const canonIssueCounts={};
@@ -1386,24 +1483,24 @@ function renderDDBestBranchChart(branchDD){
     if(!canonDisplayName[c])canonDisplayName[c]=raw;
     canonIssueCounts[c]=(canonIssueCounts[c]||0)+1;
   });
-
   // Aggregasi DD per canonical name
   const canonDDCounts={};
   Object.entries(branchDD).forEach(([ddBr,cnt])=>{
     const c=canonBranch(ddBr);
     if(c) canonDDCounts[c]=(canonDDCounts[c]||0)+cnt;
   });
-
   // Gabungkan — hanya cabang yang ada DD-nya
   const allBranchData=Object.entries(canonIssueCounts).map(([c,issueCount])=>{
     const ddCount=canonDDCounts[c]||0;
     if(ddCount===0)return null;
     const ratio=issueCount/ddCount;
     return{branch:canonDisplayName[c]||c,ddCount,issueCount,ratio};
-  }).filter(Boolean);
+  }).filter(Boolean).sort((a,b)=>a.ratio!==b.ratio?a.ratio-b.ratio:b.ddCount-a.ddCount);
 
-  // Sort: rasio terkecil dulu; sama → DD terbanyak
-  const best20=allBranchData.sort((a,b)=>a.ratio!==b.ratio?a.ratio-b.ratio:b.ddCount-a.ddCount).slice(0,20);
+  const totalPages=Math.ceil(allBranchData.length/DD_PAGE);
+  const _page=Math.min(_ddBestPage,totalPages||1);
+  const start=(_page-1)*DD_PAGE;
+  const best20=allBranchData.slice(start,start+DD_PAGE);
 
   // Plugin: label % di kanan bar terpanjang
   const ratioLabelPlugin={
@@ -1416,67 +1513,57 @@ function renderDDBestBranchChart(branchDD){
         const yPx=meta.data[i].y;
         const rn=row.ratio;
         const color=rn===0||rn<0.05?'#10b981':rn<0.15?'#f59e0b':'#f43f5e';
-        const pct=(rn*100).toFixed(1)+'%';
         ctx.save();
         ctx.font='bold 10px Inter,sans-serif';
-        ctx.fillStyle=color;
-        ctx.textAlign='left';
-        ctx.textBaseline='middle';
-        ctx.fillText(pct, xPx+7, yPx);
+        ctx.fillStyle=color; ctx.textAlign='left'; ctx.textBaseline='middle';
+        ctx.fillText(`${(rn*100).toFixed(1)}%`,xPx+7,yPx);
         ctx.restore();
       });
     }
   };
 
+  const h=Math.max(340,best20.length*30);
+  const wrap=document.getElementById('ddBestChartWrap');
+  if(wrap)wrap.style.height=h+'px';
+
   destroyChart('ddBestBranch');
   charts.ddBestBranch=new Chart(document.getElementById('ddBestBranchChart').getContext('2d'),{
-    type:'bar',
-    plugins:[ratioLabelPlugin],
+    type:'bar',plugins:[ratioLabelPlugin],
     data:{labels:best20.map(x=>x.branch),datasets:[
       {label:'MUF-Drawdown',data:best20.map(x=>x.ddCount),backgroundColor:PALETTE.emerald+'99',borderColor:PALETTE.emerald,borderWidth:2,borderRadius:4},
       {label:'Issue/Tiket',data:best20.map(x=>x.issueCount),backgroundColor:PALETTE.rose+'99',borderColor:PALETTE.rose,borderWidth:2,borderRadius:4}
     ]},
-    options:{
-      responsive:true,maintainAspectRatio:false,indexAxis:'y',
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
       layout:{padding:{right:68}},
-      plugins:{
-        legend:{position:'top'},
-        tooltip:{
-          backgroundColor:'#1e293b',
-          borderColor:'rgba(255,255,255,0.15)',
-          borderWidth:1,
-          padding:10,
-          titleColor:'#f1f5f9',
-          bodyColor:'#94a3b8',
-          callbacks:{
-            afterBody(items){
-              const idx=items[0].dataIndex; const row=best20[idx];
-              const pct=(row.ratio*100).toFixed(1);
-              return[`Rasio: ${pct}%  (${row.issueCount} issue / ${row.ddCount} DD)`];
-            }
-          }
-        }
+      plugins:{legend:{position:'top'},
+        tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8',
+          callbacks:{afterBody(items){const idx=items[0].dataIndex;const row=best20[idx];const pct=(row.ratio*100).toFixed(1);return[`Rasio: ${pct}% (${row.issueCount} issue / ${row.ddCount} DD)`];}}}
       },
-      scales:{
-        x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},
-        y:{grid:{display:false},ticks:{font:{size:10}}}
-      }
-    }
-  });
+      scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
 
-  // Tabel compact: #, Cabang, Rasio%, Stars
+  _renderPager('ddBestChartPager',_page,totalPages,p=>{_ddBestPage=p;renderDDBestBranchChart(_ddBestBranchDD);});
+
+  // Tabel: #, Cabang, DD, Issue, Rasio%, Stars
   const medals=['🥇','🥈','🥉'];
   document.getElementById('ddBestTableBody').innerHTML=best20.map((row,i)=>{
+    const globalRank=start+i;
     const pct=(row.ratio*100).toFixed(1);
     const stars=_ddStars(row.ratio);
-    const starHtml=_ddStarHtml(stars,row);
+    const tip=`${row.branch}\nDD: ${row.ddCount}  |  Issue: ${row.issueCount}\nRasio: ${pct}%`;
+    const starColors=['#f43f5e','#f59e0b','#f59e0b','#10b981','#10b981'];
+    const starColor=starColors[stars-1]||'#94a3b8';
+    const starHtml=`<span class="star-tip" data-tip="${tip}" style="color:${starColor};font-size:0.95rem;letter-spacing:0.5px">${'★'.repeat(stars)+'☆'.repeat(5-stars)}</span>`;
+    const ratioColor=row.ratio<0.05?'#10b981':row.ratio<0.15?'#f59e0b':'#f43f5e';
     return`<tr>
-      <td style="text-align:center;color:#64748b;font-size:0.78rem">${medals[i]||i+1}</td>
-      <td style="font-size:0.78rem;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.branch}">${row.branch}</td>
-      <td style="text-align:right;font-weight:700;font-size:0.82rem;white-space:nowrap;color:${row.ratio<0.05?'#10b981':row.ratio<0.15?'#f59e0b':'#f43f5e'}">${pct}%</td>
+      <td style="text-align:center;font-size:0.88rem">${medals[globalRank]||globalRank+1}</td>
+      <td style="font-size:0.78rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.branch}">${row.branch}</td>
+      <td style="text-align:right;font-size:0.8rem;color:${PALETTE.emerald};font-weight:700">${row.ddCount}</td>
+      <td style="text-align:right;font-size:0.8rem;color:${PALETTE.rose};font-weight:700">${row.issueCount}</td>
+      <td style="text-align:right;font-weight:700;font-size:0.82rem;color:${ratioColor}">${pct}%</td>
       <td style="text-align:center">${starHtml}</td>
     </tr>`;
   }).join('');
+  _renderPager('ddBestTablePager',_page,totalPages,p=>{_ddBestPage=p;renderDDBestBranchChart(_ddBestBranchDD);});
 }
 
 document.getElementById('exportDDCSV').addEventListener('click',()=>exportDDTable('csv'));
