@@ -38,6 +38,20 @@ function matchBranches(branchA, branchB) {
   return clean(branchA) === clean(branchB);
 }
 
+// canonBranch: normalisasi nama cabang untuk matching konsisten antar sheet
+// Strips "MUF-", "CAB.", "KC.", "KCP.", "SYARIAH", spasi ganda → uppercase clean
+function canonBranch(name){
+  return (name||'').toUpperCase()
+    .replace(/^MUF[-\s]+/,'')
+    .replace(/\bCAB\.?\s*/g,'')
+    .replace(/\bKC\.?\s*/g,'')
+    .replace(/\bKCP\.?\s*/g,'')
+    .replace(/\bSYARIAH\b/g,'')
+    .replace(/[-_]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
 // Parse "17 October, 2025, 1:47" → { month, year, sortKey, label }
 function parseDDDate(dateStr) {
   if (!dateStr) return null;
@@ -292,12 +306,52 @@ function renderOverview(){
 
 function renderTrendChart(){
   const months=[...new Set(filteredData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+  const totalData=months.map(m=>filteredData.filter(r=>r.Month===m).length);
+  const resolvedData=months.map(m=>filteredData.filter(r=>r.Month===m&&r.Status==='resolved').length);
+
+  // Linear trend line for total
+  function linTrend(arr){
+    const n=arr.length; if(n<2)return arr;
+    const sumX=arr.reduce((_,__,i)=>_+i,0), sumY=arr.reduce((a,b)=>a+b,0);
+    const sumXY=arr.reduce((a,v,i)=>a+i*v,0), sumX2=arr.reduce((a,_,i)=>a+i*i,0);
+    const slope=(n*sumXY-sumX*sumY)/(n*sumX2-sumX**2||1);
+    const inter=(sumY-slope*sumX)/n;
+    return arr.map((_,i)=>Math.max(0,parseFloat((inter+slope*i).toFixed(2))));
+  }
+
   destroyChart('trend');
-  charts.trend=new Chart(document.getElementById('trendChart').getContext('2d'),{type:'line',
+  charts.trend=new Chart(document.getElementById('trendChart').getContext('2d'),{
+    type:'bar',
     data:{labels:months,datasets:[
-      {label:'Total Tiket',data:months.map(m=>filteredData.filter(r=>r.Month===m).length),borderColor:PALETTE.primary,backgroundColor:PALETTE.primary+'30',tension:0.4,fill:true,pointRadius:5,borderWidth:2.5},
-      {label:'Resolved',data:months.map(m=>filteredData.filter(r=>r.Month===m&&r.Status==='resolved').length),borderColor:PALETTE.emerald,backgroundColor:PALETTE.emerald+'20',tension:0.4,fill:true,pointRadius:4,borderWidth:2,borderDash:[5,3]}
-    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true}}}});
+      {label:'Total Tiket',data:totalData,backgroundColor:PALETTE.primary+'88',borderColor:PALETTE.primary,borderWidth:2,borderRadius:6,order:3},
+      {label:'Resolved',data:resolvedData,backgroundColor:PALETTE.emerald+'88',borderColor:PALETTE.emerald,borderWidth:2,borderRadius:6,order:4},
+      {label:'Tren Total',data:linTrend(totalData),type:'line',borderColor:PALETTE.amber,backgroundColor:'transparent',tension:0.4,pointRadius:4,pointHoverRadius:6,borderWidth:2.5,borderDash:[6,4],order:1,pointBackgroundColor:PALETTE.amber},
+      {label:'Tren Resolved',data:linTrend(resolvedData),type:'line',borderColor:PALETTE.cyan,backgroundColor:'transparent',tension:0.4,pointRadius:3,pointHoverRadius:5,borderWidth:2,borderDash:[6,4],order:2,pointBackgroundColor:PALETTE.cyan},
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'top',labels:{usePointStyle:true,padding:14}},
+        tooltip:{mode:'index',intersect:false,
+          callbacks:{
+            afterBody(items){
+              const tot=items.find(i=>i.dataset.label==='Total Tiket');
+              const res=items.find(i=>i.dataset.label==='Resolved');
+              if(tot&&res&&tot.parsed.y>0){
+                const pct=((res.parsed.y/tot.parsed.y)*100).toFixed(1);
+                return[`Resolve rate: ${pct}%`];
+              }
+              return[];
+            }
+          }
+        }
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:11}},offset:true},
+        y:{grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true,ticks:{stepSize:1}}
+      }
+    }
+  });
 }
 function renderStatusChart(){
   const entries=topN(countBy(filteredData,'Status'),10);
@@ -596,13 +650,7 @@ function renderBranch(){
     }
   });
 
-  // ── 3+4. Overview Kategori ──────────────────────────────────────────
-  renderCategoryOverview();
-
-  // ── 5+6. Overview Branch ────────────────────────────────────────────
-  renderBranchOverview();
-
-  // ── 7+8. Trend Kategori per Cabang ──────────────────────────────────
+  // ── 3+4. Trend Kategori per Cabang ──────────────────────────────────
   renderBranchTrendSection();
 }
 
@@ -1094,40 +1142,47 @@ function _drawBrTrendChart(){
   const months=_brTrendMonths();
   const brRows=filteredData.filter(r=>branchField(r)===selectedBranch);
 
-  const datasets=selectedCats.map((cat,i)=>{
-    const data=months.map(m=>brRows.filter(r=>r.Month===m&&r.Category===cat).length);
+  // Bar datasets per kategori
+  const barDatasets=selectedCats.map((cat,i)=>{
     const color=MULTI[i%MULTI.length];
     return{
       label:cat.length>26?cat.slice(0,24)+'…':cat,
-      data, borderColor:color, backgroundColor:color+'20',
-      tension:0.35, fill:false,
-      pointRadius:5, pointHoverRadius:8, borderWidth:2.5,
-      pointBackgroundColor:color, pointBorderColor:'#0f172a', pointBorderWidth:2,
+      data:months.map(m=>brRows.filter(r=>r.Month===m&&r.Category===cat).length),
+      backgroundColor:color+'99',
+      borderColor:color,
+      borderWidth:2,
+      borderRadius:5,
+      order:i+2,
+      type:'bar',
     };
   });
 
-  // "Total semua kategori terpilih" dataset (dashed)
+  // Total line overlay (hanya jika >1 kategori)
+  const datasets=[...barDatasets];
   if(selectedCats.length>1){
-    const totalData=months.map(m=>brRows.filter(r=>r.Month===m&&selectedCats.includes(r.Category)).length);
+    const totalLine=months.map(m=>brRows.filter(r=>r.Month===m&&selectedCats.includes(r.Category)).length);
     datasets.push({
       label:'▬ Total',
-      data:totalData,
+      data:totalLine,
+      type:'line',
       borderColor:'#f1f5f9',
       backgroundColor:'transparent',
-      borderWidth:1.5,
+      borderWidth:2,
       borderDash:[6,4],
-      tension:0.35,
-      fill:false,
-      pointRadius:3,
-      pointHoverRadius:5,
+      tension:0.4,
+      pointRadius:4,
+      pointHoverRadius:7,
       pointBackgroundColor:'#f1f5f9',
+      pointBorderColor:'#0f172a',
+      pointBorderWidth:2,
+      order:1,
     });
   }
 
   destroyChart('brTrend');
   const ctx=document.getElementById('brTrendChart'); if(!ctx)return;
   charts.brTrend=new Chart(ctx.getContext('2d'),{
-    type:'line',
+    type:'bar',
     data:{labels:months,datasets},
     options:{
       responsive:true,maintainAspectRatio:false,
@@ -1137,16 +1192,25 @@ function _drawBrTrendChart(){
         tooltip:{
           callbacks:{
             afterBody(items){
-              // exclude the Total line from sum to avoid double count
-              const sum=items.filter(i=>i.dataset.label!=='▬ Total').reduce((s,i)=>s+i.parsed.y,0);
-              return items.length>1?['──────────',`Subtotal: ${sum}`]:[];
+              const bars=items.filter(i=>i.dataset.label!=='▬ Total');
+              const sum=bars.reduce((s,i)=>s+i.parsed.y,0);
+              return bars.length>1?['──────────',`Subtotal: ${sum}`]:[];
             }
           }
         }
       },
       scales:{
-        x:{grid:{display:false},ticks:{font:{size:11}}},
-        y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.05)'},ticks:{stepSize:1,font:{size:11}}}
+        x:{
+          type:'category',
+          offset:true,             // ← bar pertama tidak menempel axis Y
+          grid:{display:false},
+          ticks:{font:{size:11}}
+        },
+        y:{
+          beginAtZero:true,
+          grid:{color:'rgba(255,255,255,0.05)'},
+          ticks:{stepSize:1,font:{size:11}}
+        }
       }
     }
   });
@@ -1348,37 +1412,20 @@ function _applyTagTableSortAndFilter(query){
 // ===== DRAWDOWN SECTION =====
 // FIX #6: Get issue count for a DD branch — try exact match first, then fuzzy
 function getIssueCountForDDBranch(ddBranchName){
-  const nb=normBranch(ddBranchName);
-  // Exact match
-  let count=filteredData.filter(r=>normBranch(branchField(r))===nb).length;
-  if(count>0)return count;
-  // Fuzzy: find best matching branch name from Data_Source
-  const allIssueBranches=[...new Set(filteredData.map(r=>branchField(r)).filter(Boolean))];
-  const match=allIssueBranches.find(b=>matchBranches(b,ddBranchName));
-  if(match)return filteredData.filter(r=>normBranch(branchField(r))===normBranch(match)).length;
-  return 0;
+  const canon=canonBranch(ddBranchName);
+  return filteredData.filter(r=>canonBranch(branchField(r))===canon).length;
 }
 
 // FIX #6: Get matching filteredData rows for a DD branch name
 function getIssueRowsForDDBranch(ddBranchName){
-  const nb=normBranch(ddBranchName);
-  let rows=filteredData.filter(r=>normBranch(branchField(r))===nb);
-  if(rows.length>0)return rows;
-  const allIssueBranches=[...new Set(filteredData.map(r=>branchField(r)).filter(Boolean))];
-  const match=allIssueBranches.find(b=>matchBranches(b,ddBranchName));
-  if(match)return filteredData.filter(r=>normBranch(branchField(r))===normBranch(match));
-  return[];
+  const canon=canonBranch(ddBranchName);
+  return filteredData.filter(r=>canonBranch(branchField(r))===canon);
 }
 
 // FIX #6: Get tag rows for a DD branch
 function getTagRowsForDDBranch(ddBranchName){
-  const nb=normBranch(ddBranchName);
-  let rows=filteredTagData.filter(r=>normBranch(r['Branch Name']||r['Branch']||'')===nb);
-  if(rows.length>0)return rows;
-  const allTagBranches=[...new Set(filteredTagData.map(r=>r['Branch Name']||r['Branch']||'').filter(Boolean))];
-  const match=allTagBranches.find(b=>matchBranches(b,ddBranchName));
-  if(match)return filteredTagData.filter(r=>normBranch(r['Branch Name']||r['Branch']||'')===normBranch(match));
-  return[];
+  const canon=canonBranch(ddBranchName);
+  return filteredTagData.filter(r=>canonBranch(r['Branch Name']||r['Branch']||'')===canon);
 }
 
 function renderDrawdownSection(){
@@ -1477,28 +1524,34 @@ function renderDDTable(branchDD){
   }).join('');
 }
 
-// FIX #6: Best branch patokannya branch dari Data_Source, dipetakan ke DD_SimFast
 function renderDDBestBranchChart(branchDD){
-  // Gunakan branch dari Data_Source sebagai patokan
-  const issueBranchCounts=countBy(filteredData.map(r=>({...r,_bn:branchField(r)})),'_bn');
-  const allIssueBranches=Object.keys(issueBranchCounts).filter(b=>b&&b!=='Unknown');
+  // Build canonical issue counts (gabungkan varian nama yg sama)
+  const canonIssueCounts={};
+  const canonDisplayName={};
+  filteredData.forEach(r=>{
+    const raw=branchField(r);
+    const canon=canonBranch(raw);
+    if(!canon)return;
+    if(!canonDisplayName[canon])canonDisplayName[canon]=raw; // simpan display name pertama
+    canonIssueCounts[canon]=(canonIssueCounts[canon]||0)+1;
+  });
 
-  const allBranchData=allIssueBranches.map(issueBranch=>{
-    const issueCount=issueBranchCounts[issueBranch]||0;
-    // Cari drawdown yang cocok (exact atau fuzzy)
-    const nb=normBranch(issueBranch);
-    let ddCount=branchDD[issueBranch]||0;
-    if(ddCount===0){
-      // try fuzzy
-      const ddBranchKey=Object.keys(branchDD).find(b=>matchBranches(b,issueBranch));
-      if(ddBranchKey)ddCount=branchDD[ddBranchKey]||0;
-    }
-    if(ddCount===0)return null; // tidak punya drawdown, skip
+  // Build canonical DD counts
+  const canonDDCounts={};
+  Object.entries(branchDD).forEach(([ddBr,cnt])=>{
+    const canon=canonBranch(ddBr);
+    if(canon) canonDDCounts[canon]=(canonDDCounts[canon]||0)+cnt;
+  });
+
+  // Build allBranchData — hanya yang punya DD
+  const allBranchData=Object.entries(canonIssueCounts).map(([canon,issueCount])=>{
+    const ddCount=canonDDCounts[canon]||0;
+    if(ddCount===0)return null;
     const ratio=issueCount/ddCount;
-    return{branch:issueBranch,ddCount,issueCount,ratio};
+    return{branch:canonDisplayName[canon]||canon,ddCount,issueCount,ratio};
   }).filter(Boolean);
 
-  // Sort: rasio terkecil dulu, jika sama → DD terbanyak dulu
+  // Sort: rasio terkecil dulu (issue/DD terkecil = paling sehat); sama → DD terbanyak
   const best20=allBranchData.sort((a,b)=>a.ratio!==b.ratio?a.ratio-b.ratio:b.ddCount-a.ddCount).slice(0,20);
 
   destroyChart('ddBestBranch');

@@ -26,8 +26,8 @@
     /* Sticky section header */
     .section-header {
       position: sticky;
-      top: 0;
-      z-index: 50;
+      top: var(--topbar-height, 64px);
+      z-index: 40;
       background: #0f172a;
       padding-bottom: 12px;
       margin-bottom: 4px;
@@ -198,91 +198,6 @@
               <p style="color:#94a3b8;font-size:0.78rem;margin-top:2px">Angka di dalam bar · Klik bar → section Tiket</p>
             </div>
             <div class="chart-body chart-body-tall" style="height:520px"><canvas id="branchRcChart"></canvas></div>
-          </div>
-        </div>
-
-        <!-- ===== OVERVIEW KATEGORI ===== -->
-        <div class="chart-card" style="margin-top:0">
-          <div class="chart-header" style="flex-wrap:wrap;gap:10px;align-items:flex-start">
-            <div>
-              <h3>📊 Overview Kategori — Trend Issue per Bulan</h3>
-              <p style="color:#94a3b8;font-size:0.78rem;margin-top:3px">Default: Top 5 kategori + Others · Checklist untuk menambah/kurangi</p>
-            </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-left:auto">
-              <!-- Kategori dropdown -->
-              <div class="ov-dd-wrap">
-                <button class="ov-dd-btn" onclick="toggleDrop('catOvCatDrop')">📁 Kategori ▾</button>
-                <div class="ov-dd-panel" id="catOvCatDrop"></div>
-              </div>
-              <!-- Bulan dropdown -->
-              <div class="ov-dd-wrap">
-                <button class="ov-dd-btn" onclick="toggleDrop('catOvMonDrop')">📅 Bulan ▾</button>
-                <div class="ov-dd-panel" id="catOvMonDrop"></div>
-              </div>
-            </div>
-          </div>
-          <div class="chart-body" style="height:320px;margin-top:12px"><canvas id="catOvChart"></canvas></div>
-        </div>
-
-        <!-- Tabel Overview Kategori -->
-        <div class="chart-card" style="margin-top:0">
-          <div class="chart-header" style="margin-bottom:10px">
-            <h3>📋 Detail Kategori × Cabang × Bulan</h3>
-            <p style="color:#94a3b8;font-size:0.78rem;margin-top:2px">Sesuai pilihan kategori & bulan di atas · Avg = rata-rata issue ÷ cabang per bulan</p>
-          </div>
-          <div class="table-container" style="max-height:520px">
-            <table class="data-table" id="catOvTable">
-              <thead><tr>
-                <th>Kategori</th><th>Bulan</th><th>Cabang</th>
-                <th style="text-align:right">Issue</th>
-                <th>Root Cause</th><th style="text-align:right">Jml RC</th>
-                <th style="text-align:right">Avg/Cabang</th>
-                <th>Top Tags</th>
-              </tr></thead>
-              <tbody id="catOvTableBody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- ===== OVERVIEW BRANCH ===== -->
-        <div class="chart-card" style="margin-top:0">
-          <div class="chart-header" style="flex-wrap:wrap;gap:10px;align-items:flex-start">
-            <div>
-              <h3>🏢 Overview Branch — Issue per Cabang per Bulan</h3>
-              <p style="color:#94a3b8;font-size:0.78rem;margin-top:3px">Default: Top 10 cabang · Checklist untuk menambah/kurangi</p>
-            </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-left:auto">
-              <div class="ov-dd-wrap">
-                <button class="ov-dd-btn" onclick="toggleDrop('brOvBrDrop')">🏙️ Cabang ▾</button>
-                <div class="ov-dd-panel" id="brOvBrDrop"></div>
-              </div>
-              <div class="ov-dd-wrap">
-                <button class="ov-dd-btn" onclick="toggleDrop('brOvMonDrop')">📅 Bulan ▾</button>
-                <div class="ov-dd-panel" id="brOvMonDrop"></div>
-              </div>
-            </div>
-          </div>
-          <div class="chart-body" style="height:360px;margin-top:12px"><canvas id="brOvChart"></canvas></div>
-        </div>
-
-        <!-- Tabel Overview Branch -->
-        <div class="chart-card" style="margin-top:0">
-          <div class="chart-header" style="margin-bottom:10px">
-            <h3>📋 Detail Branch × Bulan</h3>
-            <p style="color:#94a3b8;font-size:0.78rem;margin-top:2px">Avg Issue & Avg RC = total ÷ jumlah bulan dipilih</p>
-          </div>
-          <div class="table-container" style="max-height:560px">
-            <table class="data-table" id="brOvTable">
-              <thead><tr>
-                <th>Cabang</th><th>Bulan</th>
-                <th style="text-align:right">Issue</th>
-                <th style="text-align:right">Avg Issue</th>
-                <th>Root Cause</th>
-                <th style="text-align:right">Jml RC</th>
-                <th style="text-align:right">Avg RC</th>
-              </tr></thead>
-              <tbody id="brOvTableBody"></tbody>
-            </table>
           </div>
         </div>
 
