@@ -792,23 +792,112 @@ html, body { overflow-x: clip; max-width: 100vw; }
 .topbar-right { flex-wrap: wrap; }
 .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 
+/* ===== TABLET (≤900px) ===== */
 @media (max-width: 900px) {
+  /* Sidebar: slide in from left */
   .sidebar { position: fixed; z-index: 200; height: 100%; transform: translateX(-100%); transition: transform 0.3s; }
   .sidebar.mobile-open { transform: translateX(0); }
   .main { margin-left: 0 !important; }
-  .topbar { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
-  .content { padding: 16px; }
-  .charts-row { flex-direction: column; }
-  .chart-card { width: 100% !important; }
+
+  /* Topbar: stack title row + filter row */
+  .topbar {
+    height: auto !important;
+    min-height: 52px;
+    padding: 10px 14px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .topbar-left { flex: none; }
+  .topbar-right {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  /* Each filter group: 2 per row */
+  .filter-group {
+    flex: 1 1 130px;
+    min-width: 110px;
+    max-width: calc(50% - 4px);
+    position: relative;
+  }
+  .ov-dd-wrap { width: 100%; }
+  .ov-dd-btn { width: 100% !important; min-width: 0 !important; font-size: 0.78rem !important; padding: 5px 8px !important; text-align: left !important; }
+  .filter-select { width: 100% !important; min-width: 0 !important; font-size: 0.78rem !important; }
+  /* Export buttons: compact */
+  .export-group { flex-wrap: wrap; gap: 4px; }
+  .export-btn { padding: 5px 8px !important; font-size: 0.72rem !important; }
+  .refresh-btn { padding: 6px 12px !important; font-size: 0.78rem !important; }
+
+  /* Section header: not sticky on mobile (topbar height dynamic) */
+  .section-header { position: relative !important; top: auto !important; z-index: auto !important; }
+
+  /* Charts: stack everything */
+  .charts-row { flex-direction: column; gap: 12px; }
+  .chart-card { width: 100% !important; flex: unset !important; }
+  .chart-card.chart-lg, .chart-card.chart-sm { flex: unset !important; width: 100% !important; }
+
+  /* Chart heights: reduce on mobile */
+  .chart-body { height: 240px !important; }
+  .chart-body-tall { height: 280px !important; }
+
+  /* KPI */
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .chart-card.chart-lg, .chart-card.chart-sm { flex: unset; width: 100% !important; }
+
+  /* DD chart wraps: cap height */
+  #ddVsIssueChartWrap { height: 320px !important; }
+  #ddBestChartWrap { height: 320px !important; }
+
+  /* Overview right column: stack status + month table */
+  #statusTableBody td, #monthBreakdownBody td { font-size: 0.76rem; padding: 4px 5px; }
+
+  /* Star tooltip: open upward or downward safely */
+  .star-tip::after { left: 0; transform: none; min-width: 140px; font-size: 0.72rem; }
+
+  /* Pager: compact */
+  #ddVsIssuePager button, #ddTablePager button,
+  #ddBestChartPager button, #ddBestTablePager button { padding: 4px 8px; font-size: 0.73rem; }
+
+  /* Content padding */
+  .content { padding: 14px 12px; }
+  .section { padding: 0; }
+  .chart-card { padding: 14px; }
 }
+
+/* ===== PHONE (≤480px) ===== */
 @media (max-width: 480px) {
+  .topbar { padding: 8px 12px; gap: 6px; }
+  .filter-group { flex: 1 1 100%; max-width: 100%; }
+  .ov-dd-btn { font-size: 0.76rem !important; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
-  .export-group { display: none; }
-  .topbar-right { gap: 4px; }
-  .filter-group label { display: none; }
+  .kpi-value { font-size: 1.35rem; }
+  .kpi-label { font-size: 0.7rem; }
+  /* Hide export group in topbar to save space */
+  .topbar-right .export-group { display: none; }
+  .chart-body { height: 200px !important; }
+  .chart-body-tall { height: 240px !important; }
+  #ddVsIssueChartWrap { height: 260px !important; }
+  #ddBestChartWrap { height: 260px !important; }
+  .content { padding: 10px; }
+  .chart-card { padding: 12px; }
+  /* Tables: smaller text */
+  .data-table td, .data-table th { font-size: 0.74rem; padding: 5px 6px; }
+  /* Section title */
+  .section-title { font-size: 1.2rem; }
+  .section-subtitle { font-size: 0.72rem; }
 }
+
+/* Touch-friendly tap targets */
+@media (hover: none) and (pointer: coarse) {
+  .ov-dd-btn, .ov-cb-row, .filter-select, .export-btn, .nav-item, .refresh-btn {
+    min-height: 40px;
+  }
+  .ov-cb-row { padding: 6px 10px; gap: 10px; }
+  .ov-cb-row input[type="checkbox"], .ov-cb-row input[type="radio"] { width: 18px; height: 18px; cursor: pointer; }
+}
+
 
 /* ===== KPI CLICKABLE ===== */
 .kpi-clickable { cursor: pointer; transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s; }

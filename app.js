@@ -1816,16 +1816,47 @@ function toggleDrop(id) {
   const panel = document.getElementById(id);
   if (!panel) return;
   const isOpen = panel.classList.contains('open');
-  // Close all others
-  document.querySelectorAll('.ov-dd-panel.open').forEach(p => p.classList.remove('open'));
-  if (!isOpen) panel.classList.add('open');
-}
-// Close dropdowns on outside click
-document.addEventListener('click', e => {
-  if (!e.target.closest('.ov-dd-wrap')) {
-    document.querySelectorAll('.ov-dd-panel.open').forEach(p => p.classList.remove('open'));
+  // Close all open panels and reset inline styles
+  document.querySelectorAll('.ov-dd-panel.open').forEach(p => {
+    p.classList.remove('open');
+    p.removeAttribute('style');
+  });
+  if (isOpen) return;
+
+  // On mobile: position panel as fixed relative to its trigger button
+  if (window.innerWidth < 900) {
+    const btn = panel.previousElementSibling || panel.parentElement.querySelector('button');
+    if (btn) {
+      const r = btn.getBoundingClientRect();
+      const W = window.innerWidth;
+      const panelW = Math.min(260, W - 16);
+      let left = r.left;
+      if (left + panelW > W - 8) left = W - panelW - 8;
+      if (left < 8) left = 8;
+      const maxH = Math.min(320, window.innerHeight - r.bottom - 24);
+      panel.style.cssText = `position:fixed!important;top:${r.bottom + 4}px!important;left:${left}px!important;width:${panelW}px!important;max-height:${maxH}px!important;overflow-y:auto!important;z-index:999999!important;`;
+    }
   }
-});
+  panel.classList.add('open');
+}
+
+// Close dropdowns on outside click/tap
+document.addEventListener('click', e => {
+  if (!e.target.closest('.ov-dd-wrap') && !e.target.closest('.ov-dd-panel')) {
+    document.querySelectorAll('.ov-dd-panel.open').forEach(p => {
+      p.classList.remove('open');
+      p.removeAttribute('style');
+    });
+  }
+}, true);
+
+// Close on scroll (reposition would be complex, just close)
+window.addEventListener('scroll', () => {
+  document.querySelectorAll('.ov-dd-panel.open').forEach(p => {
+    p.classList.remove('open');
+    p.removeAttribute('style');
+  });
+}, { passive: true });
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => { loadData(); });
