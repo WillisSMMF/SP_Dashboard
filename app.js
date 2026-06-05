@@ -9,6 +9,9 @@
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1712613541&single=true&output=csv';
 const TAG_CSV_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1035358319&single=true&output=csv';
 const DD_CSV_URL    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=408991878&single=true&output=csv';
+// Master sheet — diisi dari Master.csv yang di-upload ke GitHub Pages
+// ATAU ganti dengan URL publish Google Sheets jika sudah dipublish
+const MASTER_CSV_URL= 'https://willissmmf.github.io/SP_Dashboard/Master.csv';
 
 const CORS_PROXIES = [
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
@@ -28,6 +31,85 @@ function isExcludedBranch(name) {
 const MONTH_ORDER = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const monthNumToName = n => MONTH_ORDER[parseInt(n) - 1] || '';
 const normBranch = s => (s || '').trim().toUpperCase();
+
+// ===== MASTER SHEET =====
+let masterData=[];
+const masterBranchMap=new Map(); // canonBranch → {gel,implementDate,wilayah,hasSimfast}
+let filteredSFData=[];
+
+const ID_MONTHS_MAP={'januari':0,'februari':1,'maret':2,'april':3,'mei':4,'juni':5,'juli':6,'agustus':7,'september':8,'oktober':9,'november':10,'desember':11,'january':0,'february':1,'march':2,'may':4,'june':5,'july':6,'august':7,'october':9,'december':11,'april':3,'september':8,'november':10};
+
+function parseMasterDate(s){
+  if(!s||!String(s).trim())return null;
+  s=String(s).trim();
+  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m)return new Date(+m[3],+m[2]-1,+m[1]);
+  const parts=s.split(/[\s,]+/);
+  if(parts.length>=3){const d=parseInt(parts[0]),mon=ID_MONTHS_MAP[parts[1].toLowerCase()],y=parseInt(parts[2]);if(!isNaN(d)&&mon!==undefined&&!isNaN(y))return new Date(y,mon,d);}
+  const d=new Date(s);return isNaN(d.getTime())?null:d;
+}
+
+function parseIssueDate(s){
+  if(!s)return null;
+  if(s instanceof Date)return s;
+  let m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
+  m=String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m)return new Date(+m[3],+m[1]-1,+m[2]);
+  const d=new Date(s);return isNaN(d.getTime())?null:d;
+}
+
+function processMasterData(rows){
+  masterBranchMap.clear();
+  rows.forEach(r=>{
+    const cab=(r['Cabang']||r['cabang']||'').trim();
+    const gel=(r['Gel_SimFast']||r['Gel']||'').toString().trim();
+    const impl=parseMasterDate(r['Implement']||r['implement']||'');
+    const wil=(r['Wilayah']||r['wilayah']||'').trim();
+    const hasSimfast=(r['Has_SimFast']||r['has_simfast']||'0')!=='0';
+    if(!cab)return;
+    masterBranchMap.set(canonBranch(cab),{branch:cab,gel,implementDate:impl,wilayah:wil,hasSimfast:hasSimfast&&impl!==null});
+  });
+}
+
+function isSimfastBranch(branchName){
+  const info=masterBranchMap.get(canonBranch(branchName));
+  return !!(info&&info.hasSimfast);
+}
+
+function getMasterInfo(branchName){
+  return masterBranchMap.get(canonBranch(branchName))||null;
+}
+
+function preprocessSimfastData(){
+  allData.forEach(r=>{
+    const prod=r['Product Source']||'';
+    if(prod!=='SimFast'&&prod!=='Simascore'){r._sfActive=false;return;}
+    const issueDate=parseIssueDate(r['Date Submitted']);
+    if(!issueDate){r._sfActive=false;return;}
+    const info=getMasterInfo(branchField(r));
+    if(!info||!info.implementDate){r._sfActive=false;return;}
+    r._sfActive=issueDate>=info.implementDate;
+    r._sfGel=info.gel;
+    r._sfWilayah=info.wilayah;
+  });
+}
+
+function _rebuildBranchForProduct(){
+  const prod=filterProduct.value;
+  let branches;
+  if(prod==='SimFast'||prod==='Simascore'){
+    branches=[...new Set(allData
+      .filter(r=>(r['Product Source']==='SimFast'||r['Product Source']==='Simascore')&&isSimfastBranch(branchField(r)))
+      .map(r=>branchField(r)).filter(Boolean))].sort();
+  }else{
+    branches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
+  }
+  filterState.branches=[];
+  _buildBranchChecklist(branches,'');
+}
 
 // FIX #6: Fuzzy branch matching — strip common suffixes for matching
 function matchBranches(branchA, branchB) {
@@ -312,6 +394,13 @@ function applyGlobalFilters(){
     }
     return true;
   });
+  // SimFast filtered data (date-aware, always SimFast+Simascore)
+  filteredSFData=allData.filter(r=>{
+    if(!r._sfActive)return false;
+    if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
+    if(selBranches.length&&!selBranches.includes(branchField(r)))return false;
+    return true;
+  });
   currentPage=1;
   renderAll();
 }
@@ -369,16 +458,27 @@ async function loadData(){
   showLoading(true);
   refreshBtn.classList.add('spinning');
   try{
-    const [main,tags,dd]=await Promise.all([parseCSV(SHEET_CSV_URL,'Data_Source'),parseCSV(TAG_CSV_URL,'Helper_Tag'),parseCSV(DD_CSV_URL,'DD_SimFast')]);
+    const masterFetch=parseCSV(MASTER_CSV_URL,'Master').catch(()=>[]);
+    const [main,tags,dd,master]=await Promise.all([
+      parseCSV(SHEET_CSV_URL,'Data_Source'),parseCSV(TAG_CSV_URL,'Helper_Tag'),
+      parseCSV(DD_CSV_URL,'DD_SimFast'),masterFetch]);
     allData=main.filter(r=>r.Id&&r.Id.trim()!=='');
     tagData=tags.filter(r=>r.Id);
-    // FIX #7: Filter out excluded branches from DD data
     ddData=dd.filter(r=>(r['Branch Name']||r.Status)&&!isExcludedBranch(r['Branch Name']));
+    masterData=master;
+    processMasterData(master);
+    preprocessSimfastData();
     showLoading(false);
     refreshBtn.classList.remove('spinning');
     lastUpdateEl.textContent='Update: '+new Date().toLocaleTimeString('id-ID');
-    document.querySelector('.ds-val').textContent='3 Sheets ✓';
+    document.querySelector('.ds-val').textContent=master.length>0?'4 Sheets ✓':'3 Sheets ✓ (Master: upload Master.csv ke GitHub)';
     populateFilters();
+    // Default: SimFast dipilih saat pertama load
+    if(!filterProduct.value){
+      const sfOpt=Array.from(filterProduct.options).find(o=>o.value==='SimFast');
+      if(sfOpt) filterProduct.value='SimFast';
+    }
+    _rebuildBranchForProduct();
     applyGlobalFilters();
   }catch(err){
     showLoading(false);
@@ -411,6 +511,7 @@ function renderAll(){
   renderBranch();
   renderTagSection();
   renderDrawdownSection();
+  renderOverviewSimfast(); // SimFast section
   // Map only renders on demand when tab is active
 }
 
@@ -1812,6 +1913,199 @@ document.getElementById('exportXLSX').addEventListener('click', () => exportXLSX
 document.getElementById('exportPDF').addEventListener('click', () => exportPDF());
 
 // ===== DROPDOWN TOGGLE =====
+// ===================================================================
+// ===== OVERVIEW SIMFAST SECTION ====================================
+// ===================================================================
+let _sfClickedCat=null;
+
+function renderOverviewSimfast(){
+  if(!document.getElementById('section-simfast'))return;
+  const data=filteredSFData;
+  _renderSfKpi(data);
+  _renderSfTrendChart(data);
+  _renderSfMonthBreakdown(data);
+  _renderSfCategoryChart(data);
+  _renderSfCategoryRCTable(data);
+  if(_sfClickedCat) _renderSfTicketDetail(_sfClickedCat);
+}
+
+function _renderSfKpi(data){
+  const total=data.length;
+  const resolved=data.filter(r=>r.Status==='resolved').length;
+  const branches=[...new Set(data.map(r=>branchField(r)).filter(Boolean))].length;
+  const ddCount=filteredDDData.filter(r=>r.Status==='MUF-Drawdown').length;
+  const e=id=>document.getElementById(id);
+  if(e('sfKpiTotal'))e('sfKpiTotal').textContent=total.toLocaleString();
+  if(e('sfKpiResolved'))e('sfKpiResolved').textContent=resolved.toLocaleString();
+  if(e('sfKpiBranch'))e('sfKpiBranch').textContent=branches;
+  if(e('sfKpiDD'))e('sfKpiDD').textContent=ddCount.toLocaleString();
+  if(e('sfKpiRate'))e('sfKpiRate').textContent=total>0?((resolved/total)*100).toFixed(1)+'%':'0%';
+}
+
+function _sfGetMonthKeys(data){
+  const keyMap={};
+  data.forEach(r=>{const k=getRowMonthKey(r);if(k)keyMap[k]=1;});
+  return Object.keys(keyMap).sort((a,b)=>{
+    const p=s=>{const q=s.split(' ');return(q.length>1?+q[0]:9999)*100+MONTH_ORDER.indexOf(q[q.length-1]);};
+    return p(a)-p(b);
+  });
+}
+
+function _renderSfTrendChart(data){
+  const keys=_sfGetMonthKeys(data);
+  const totals=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k).length);
+  const mean=totals.length?totals.reduce((a,b)=>a+b,0)/totals.length:0;
+  const meanArr=totals.map(()=>+mean.toFixed(1));
+
+  const pctPlugin={id:'sfPct',afterDraw(chart){
+    if(totals.length<2)return;
+    const ctx=chart.ctx,meta=chart.getDatasetMeta(0);
+    totals.forEach((v,i)=>{
+      if(i===0||!meta.data[i])return;
+      const prev=totals[i-1];if(!prev)return;
+      const pct=((v-prev)/prev*100).toFixed(1);
+      const sign=v>prev?'+':'';
+      const col=v>prev?'#f43f5e':v<prev?'#10b981':'#94a3b8';
+      ctx.save();ctx.font='bold 10px Inter,sans-serif';ctx.fillStyle=col;
+      ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText(`${sign}${pct}%`,meta.data[i].x,meta.data[i].y-3);ctx.restore();
+    });
+  }};
+
+  destroyChart('sfTrend');
+  const el=document.getElementById('sfTrendChart');if(!el)return;
+  charts.sfTrend=new Chart(el.getContext('2d'),{
+    type:'bar',plugins:[pctPlugin],
+    data:{labels:keys,datasets:[
+      {label:'Total Tiket SimFast',data:totals,backgroundColor:PALETTE.primary+'88',borderColor:PALETTE.primary,borderWidth:2,borderRadius:6,order:2},
+      {label:`Rata-rata (${mean.toFixed(1)})`,data:meanArr,type:'line',borderColor:PALETTE.amber,backgroundColor:'transparent',borderWidth:2,borderDash:[7,4],tension:0,pointRadius:0,order:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},
+      plugins:{legend:{position:'top'},
+        tooltip:{callbacks:{afterBody(items){
+          const i=items[0].dataIndex;
+          if(i>0&&totals[i-1]){const pct=((totals[i]-totals[i-1])/totals[i-1]*100).toFixed(1);const sign=totals[i]>=totals[i-1]?'+':'';return[`Δ MoM: ${sign}${pct}%`];}
+          return[];
+        }}}
+      },
+      scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}
+    }
+  });
+}
+
+function _renderSfMonthBreakdown(data){
+  const el=document.getElementById('sfMonthBreakdownBody');if(!el)return;
+  const keys=_sfGetMonthKeys(data);
+  if(!keys.length){el.innerHTML='<tr><td colspan="5" style="text-align:center;color:#64748b;padding:10px">Tidak ada data</td></tr>';return;}
+  const totals=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k).length);
+  const mean=totals.reduce((a,b)=>a+b,0)/totals.length;
+
+  el.innerHTML=keys.map((k,i)=>{
+    const count=totals[i];
+    const prev=i>0?totals[i-1]:null;
+    let momHtml='<span style="color:#475569">—</span>';
+    if(prev!==null&&prev>0){
+      const pct=((count-prev)/prev*100).toFixed(1);
+      const sign=count>prev?'+':'';
+      const c=count>prev?'#f43f5e':count<prev?'#10b981':'#94a3b8';
+      momHtml=`<span style="color:${c};font-weight:600">${sign}${pct}%</span>`;
+    }
+    // Count active SimFast branches for this month
+    const [yearStr,monthName]=(k+' ').split(' ');
+    const yr=parseInt(yearStr),mo=MONTH_ORDER.indexOf(monthName);
+    const monthEnd=yr&&mo>=0?new Date(yr,mo+1,0):null;
+    const activeBranches=monthEnd?[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=monthEnd).length:'-';
+    const avgColor=count>mean?'#f43f5e':'#10b981';
+    return`<tr>
+      <td style="padding:5px 8px;white-space:nowrap;font-size:0.78rem">${k}</td>
+      <td style="text-align:right;font-weight:700;color:#f1f5f9;padding:5px 6px">${count}</td>
+      <td style="text-align:right;font-size:0.77rem;color:${avgColor};padding:5px 6px" title="Mean semua bulan">${mean.toFixed(1)}</td>
+      <td style="text-align:right;padding:5px 8px">${momHtml}</td>
+      <td style="text-align:right;font-size:0.77rem;color:#94a3b8;padding:5px 8px" title="Cabang SimFast aktif">${activeBranches}</td>
+    </tr>`;
+  }).join('');
+}
+
+function _renderSfCategoryChart(data){
+  const entries=topN(countBy(data,'Category'),10);
+  destroyChart('sfCategory');
+  const el=document.getElementById('sfCategoryChart');if(!el)return;
+  charts.sfCategory=new Chart(el.getContext('2d'),{type:'bar',
+    data:{labels:entries.map(x=>x[0]),datasets:[{data:entries.map(x=>x[1]),backgroundColor:MULTI.map(c=>c+'cc'),borderColor:MULTI,borderWidth:2,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+}
+
+function _renderSfCategoryRCTable(data){
+  const thead=document.getElementById('sfCategoryRCHead');
+  const tbody=document.getElementById('sfCategoryRCBody');
+  if(!thead||!tbody)return;
+
+  // Build matrix: categories × root causes
+  const cats=[...new Set(data.map(r=>r.Category||'').filter(Boolean))].sort();
+  const rcs=[...new Set(data.map(r=>r['Root Cause']||'').filter(Boolean))];
+  // Sort RCs by frequency
+  const rcCount={};rcs.forEach(rc=>{rcCount[rc]=data.filter(r=>r['Root Cause']===rc).length;});
+  const topRCs=Object.entries(rcCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(x=>x[0]);
+
+  thead.innerHTML=`<tr>
+    <th style="min-width:160px">Kategori</th>
+    ${topRCs.map(rc=>`<th style="text-align:right;min-width:80px;font-size:0.77rem" title="${rc}">${rc.length>14?rc.slice(0,12)+'…':rc}</th>`).join('')}
+    <th style="text-align:right;min-width:60px">Total</th>
+  </tr>`;
+
+  tbody.innerHTML=cats.map(cat=>{
+    const catRows=data.filter(r=>r.Category===cat);
+    const cells=topRCs.map(rc=>{
+      const n=catRows.filter(r=>r['Root Cause']===rc).length;
+      return `<td style="text-align:right;color:${n>0?'#f1f5f9':'#334155'};font-weight:${n>0?700:400}">${n||'—'}</td>`;
+    }).join('');
+    const total=catRows.length;
+    return`<tr style="cursor:pointer" onclick="window._sfCatClick('${cat.replace(/'/g,"\\'")}')" title="Klik untuk detail tiket ${cat}">
+      <td style="font-weight:600;font-size:0.82rem;color:${PALETTE.primary}">${cat}</td>
+      ${cells}
+      <td style="text-align:right;font-weight:700;color:${PALETTE.amber}">${total}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="20" style="text-align:center;color:#64748b;padding:12px">Tidak ada data</td></tr>';
+}
+
+// Global click handler untuk category RC table
+window._sfCatClick=function(cat){
+  _sfClickedCat=cat;
+  _renderSfTicketDetail(cat);
+  const card=document.getElementById('sfTicketDetailCard');
+  if(card){card.style.display='block';card.scrollIntoView({behavior:'smooth',block:'start'});}
+};
+
+function _renderSfTicketDetail(cat){
+  const titleEl=document.getElementById('sfTicketDetailTitle');
+  const bodyEl=document.getElementById('sfTicketDetailBody');
+  if(!titleEl||!bodyEl)return;
+  const rows=filteredSFData.filter(r=>r.Category===cat).sort((a,b)=>{
+    const da=parseIssueDate(a['Date Submitted']),db=parseIssueDate(b['Date Submitted']);
+    return (db||0)-(da||0);
+  });
+  titleEl.textContent=`📋 Detail Tiket — ${cat} (${rows.length} tiket)`;
+  bodyEl.innerHTML=rows.map((r,i)=>{
+    const sla=parseFloat(r.SLA);
+    const slaStr=isNaN(sla)?'-':(sla===1?'1 day':`${sla} days`);
+    const slaClass=isNaN(sla)?'':sla<=1?'sla-good':sla<=3?'sla-warn':'sla-bad';
+    const gel=r._sfGel!==undefined?r._sfGel:'—';
+    const ds=r['Date Submitted'];
+    const dateStr=ds instanceof Date?ds.toLocaleDateString('id-ID'):String(ds||'').split(' ')[0];
+    return`<tr>
+      <td style="text-align:center;color:#64748b;font-size:0.78rem">${i+1}</td>
+      <td style="text-align:center"><span style="background:${PALETTE.primary}22;color:${PALETTE.primary};padding:2px 8px;border-radius:10px;font-size:0.78rem;font-weight:700">Gel ${gel}</span></td>
+      <td style="font-size:0.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${branchField(r)}">${branchField(r)}</td>
+      <td style="white-space:nowrap;font-size:0.78rem">${dateStr}</td>
+      <td><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary}">#${r.Id}</a></td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem" title="${r.Summary||''}">${r.Summary||'-'}</td>
+      <td style="font-size:0.78rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['Root Cause']||'-'}</td>
+      <td><span class="badge badge-${r.Status==='resolved'?'resolved':r.Status==='assigned'?'open':'pending'}" style="font-size:0.72rem">${r.Status||'-'}</span></td>
+      <td style="text-align:right"><span class="${slaClass}">${slaStr}</span></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="9" style="text-align:center;color:#64748b;padding:12px">Tidak ada tiket</td></tr>';
+}
+
 function toggleDrop(id) {
   const panel = document.getElementById(id);
   if (!panel) return;
