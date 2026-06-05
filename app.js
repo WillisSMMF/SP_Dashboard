@@ -235,8 +235,8 @@ navItems.forEach(item => {
   });
 });
 
-const SECTION_ICONS = { overview:'📊', tickets:'🎫', sla:'⏱️', branch:'🗺️', tags:'🏷️', drawdown:'💰', map:'🌍' };
-const SECTION_TITLES = { overview:'Overview', tickets:'Daftar Tiket', sla:'Analisis SLA', branch:'Analisis Cabang', tags:'Analisis Tag', drawdown:'Analisis Drawdown', map:'Peta Cabang (Experiment)' };
+const SECTION_ICONS = { overview:'📊', simfast:'🚀', tickets:'🎫', sla:'⏱️', branch:'🗺️', tags:'🏷️', drawdown:'💰', map:'🌍' };
+const SECTION_TITLES = { overview:'Overview', simfast:'Overview SimFast', tickets:'Daftar Tiket', sla:'Analisis SLA', branch:'Analisis Cabang', tags:'Analisis Tag', drawdown:'Analisis Drawdown', map:'Peta Cabang (Experiment)' };
 
 function navigateTo(section, statusFilter) {
   navItems.forEach(n => n.classList.remove('active'));
@@ -251,6 +251,7 @@ function navigateTo(section, statusFilter) {
     tableStatusEl.value=statusFilter; tableFilter.status=statusFilter; currentPage=1; renderTicketTable();
   }
   if (section==='map') renderMapSection();
+  if (section==='simfast') renderOverviewSimfast();
 }
 
 // ===== FILTER POPULATE =====
@@ -1919,7 +1920,9 @@ document.getElementById('exportPDF').addEventListener('click', () => exportPDF()
 let _sfClickedCat=null;
 
 function renderOverviewSimfast(){
-  if(!document.getElementById('section-simfast'))return;
+  // Only render when section is visible (Chart.js needs visible canvas)
+  const sec=document.getElementById('section-simfast');
+  if(!sec||!sec.classList.contains('active'))return;
   const data=filteredSFData;
   _renderSfKpi(data);
   _renderSfTrendChart(data);
