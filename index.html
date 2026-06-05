@@ -212,39 +212,46 @@
       <section id="section-simfast" class="section">
         <div class="section-header">
           <h1 class="section-title">🚀 Overview SimFast</h1>
-          <p class="section-subtitle">Data issue SimFast &amp; Simascore · Dihitung sejak tanggal Implement per gelombang cabang · Ikuti slicer Bulan &amp; Cabang</p>
+          <p class="section-subtitle">Data issue SimFast &amp; Simascore · Dihitung sejak tanggal Implement per gelombang cabang</p>
         </div>
 
-        <!-- KPI -->
+        <!-- KPI 5 cards -->
         <div class="kpi-grid">
           <div class="kpi-card"><div class="kpi-label">Total Tiket SimFast</div><div class="kpi-value" id="sfKpiTotal">—</div></div>
-          <div class="kpi-card"><div class="kpi-label">Resolved</div><div class="kpi-value" id="sfKpiResolved">—</div></div>
-          <div class="kpi-card"><div class="kpi-label">Resolve Rate</div><div class="kpi-value" id="sfKpiRate">—</div></div>
-          <div class="kpi-card"><div class="kpi-label">Cabang Aktif</div><div class="kpi-value" id="sfKpiBranch">—</div></div>
-          <div class="kpi-card"><div class="kpi-label">MUF-Drawdown</div><div class="kpi-value" id="sfKpiDD">—</div></div>
+          <div class="kpi-card"><div class="kpi-label">Cabang Aktif</div><div class="kpi-value" id="sfKpiBranch">—</div><div style="font-size:0.7rem;color:#64748b;margin-top:4px">s.d akhir periode</div></div>
+          <div class="kpi-card" id="sfKpiCardPeople" onclick="window._sfKpiRCClick('People')" style="cursor:pointer;transition:border-color 0.2s;border:1.5px solid rgba(255,255,255,0.07)">
+            <div class="kpi-label" style="color:#f43f5e">👤 People</div><div class="kpi-value" id="sfKpiPeople">—</div>
+            <div style="font-size:0.69rem;color:#64748b;margin-top:4px">Root Cause = People</div></div>
+          <div class="kpi-card" id="sfKpiCardProcess" onclick="window._sfKpiRCClick('Process')" style="cursor:pointer;transition:border-color 0.2s;border:1.5px solid rgba(255,255,255,0.07)">
+            <div class="kpi-label" style="color:#f59e0b">⚙️ Process</div><div class="kpi-value" id="sfKpiProcess">—</div>
+            <div style="font-size:0.69rem;color:#64748b;margin-top:4px">Root Cause = Process</div></div>
+          <div class="kpi-card" id="sfKpiCardSystem" onclick="window._sfKpiRCClick('System')" style="cursor:pointer;transition:border-color 0.2s;border:1.5px solid rgba(255,255,255,0.07)">
+            <div class="kpi-label" style="color:#6366f1">🖥️ System</div><div class="kpi-value" id="sfKpiSystem">—</div>
+            <div style="font-size:0.69rem;color:#64748b;margin-top:4px">Root Cause = System</div></div>
         </div>
 
         <!-- Trend Chart + Tren Bulanan -->
         <div class="charts-row" style="align-items:flex-start">
           <div class="chart-card chart-lg">
-            <div class="chart-header">
-              <h3>📈 Tren Tiket per Bulan — SimFast</h3>
-              <p style="color:#94a3b8;font-size:0.75rem;margin-top:2px">Bar = total tiket · Garis putus = rata-rata · Label % = perubahan MoM</p>
+            <div class="chart-header" style="flex-wrap:wrap;gap:8px">
+              <div>
+                <h3>📈 Tren Tiket per Bulan — SimFast</h3>
+                <p style="color:#94a3b8;font-size:0.75rem;margin-top:2px">Stacked bar = People/Process/System · Klik bar untuk filter detail di bawah</p>
+              </div>
+              <div id="sfTrendRCBtns" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
             </div>
-            <div class="chart-body" style="height:280px"><canvas id="sfTrendChart"></canvas></div>
+            <div class="chart-body" style="height:300px"><canvas id="sfTrendChart"></canvas></div>
           </div>
           <div class="chart-card" style="flex:0.75;min-width:220px;padding:0">
-            <div class="chart-header" style="padding:14px 16px 10px">
-              <h3>📅 Tren Bulanan SimFast</h3>
-            </div>
+            <div class="chart-header" style="padding:14px 16px 10px"><h3>📅 Tren Bulanan SimFast</h3></div>
             <div style="padding:0 4px 8px;overflow-x:auto">
               <table class="data-table" style="font-size:0.8rem;width:100%;min-width:290px">
                 <thead><tr>
                   <th style="padding:6px 8px">Bulan</th>
-                  <th style="text-align:right;padding:6px 6px" title="Total tiket SimFast pada bulan ini — dihitung sejak tanggal Implement per cabang">Tiket</th>
+                  <th style="text-align:right;padding:6px 6px" title="Total tiket SimFast — dihitung sejak Implement per cabang">Tiket</th>
                   <th style="text-align:right;padding:6px 6px" title="Avg = rata-rata jumlah tiket semua bulan yang ditampilkan">Avg</th>
-                  <th style="text-align:right;padding:6px 8px" title="MoM (Month-over-Month) = Perubahan % tiket vs bulan sebelumnya. Merah=naik, Hijau=turun">MoM</th>
-                  <th style="text-align:right;padding:6px 8px" title="Jumlah cabang SimFast yang sudah aktif (Implement) pada bulan ini">Cbg.</th>
+                  <th style="text-align:right;padding:6px 8px" title="MoM = perubahan % vs bulan sebelumnya. Merah=naik, Hijau=turun">MoM</th>
+                  <th style="text-align:right;padding:6px 8px" title="Cabang SimFast aktif (sudah Implement) s.d bulan ini">Cbg.</th>
                 </tr></thead>
                 <tbody id="sfMonthBreakdownBody"></tbody>
               </table>
@@ -252,58 +259,70 @@
           </div>
         </div>
 
-        <!-- Category Chart -->
-        <div class="charts-row">
-          <div class="chart-card chart-lg">
-            <div class="chart-header"><h3>Top Kategori — SimFast</h3></div>
-            <div class="chart-body"><canvas id="sfCategoryChart"></canvas></div>
-          </div>
-        </div>
-
-        <!-- Category × Root Cause Table -->
-        <div class="chart-card">
-          <div class="chart-header" style="flex-wrap:wrap;gap:8px">
-            <div>
-              <h3>📋 Kategori × Root Cause — SimFast</h3>
-              <p style="color:#94a3b8;font-size:0.75rem;margin-top:3px">Klik baris kategori untuk melihat detail tiket · Kolom = Root Cause teratas</p>
+        <!-- Detail Table (default tampil semua) -->
+        <div class="chart-card" id="sfDetailTableCard">
+          <div class="chart-header" style="flex-wrap:wrap;gap:10px">
+            <h3 id="sfDetailTitle">📋 Detail Tiket SimFast</h3>
+            <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
+              <button id="sfDetailClearBtn" onclick="window._sfClearDetailFilter()" style="display:none;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;padding:5px 12px;border-radius:8px;cursor:pointer;font-size:0.78rem">✕ Reset Filter</button>
+              <button onclick="window._sfExportDetailXLS()" style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);color:#6ee7b7;padding:5px 12px;border-radius:8px;cursor:pointer;font-size:0.78rem">📊 Export XLS</button>
             </div>
           </div>
-          <div class="table-container">
-            <table class="data-table" style="font-size:0.82rem">
-              <thead id="sfCategoryRCHead"></thead>
-              <tbody id="sfCategoryRCBody"></tbody>
+          <div class="table-container" style="max-height:440px">
+            <table class="data-table" style="font-size:0.8rem">
+              <thead id="sfDetailThead">
+                <tr>
+                  <th style="width:28px">#</th>
+                  <th style="width:65px;text-align:center">Gel.</th>
+                  <th>Cabang</th>
+                  <th style="white-space:nowrap">Tgl. Submit</th>
+                  <th>ID</th>
+                  <th style="min-width:150px">Summary</th>
+                  <th>Kategori</th>
+                  <th>Produk</th>
+                  <th>Root Cause</th>
+                  <th>Cabang</th>
+                </tr>
+              </thead>
+              <tbody id="sfDetailTbody"></tbody>
             </table>
           </div>
         </div>
 
-        <!-- Ticket Detail Card (hidden until category clicked) -->
-        <div class="chart-card" id="sfTicketDetailCard" style="display:none">
+        <!-- Top Kategori Stacked + Pie Chart RC -->
+        <div class="charts-row" style="align-items:flex-start">
+          <div class="chart-card chart-lg">
+            <div class="chart-header"><h3>Top Kategori — SimFast</h3><p style="color:#94a3b8;font-size:0.75rem;margin-top:2px">Stacked bar by Root Cause: People / Process / System</p></div>
+            <div class="chart-body" style="height:320px"><canvas id="sfCategoryChart"></canvas></div>
+          </div>
+          <div class="chart-card chart-sm" style="flex:0.7">
+            <div class="chart-header"><h3>Root Cause — SimFast</h3></div>
+            <div class="chart-body" style="height:320px"><canvas id="sfRCPieChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Category × Root Cause × Month Table -->
+        <div class="chart-card">
           <div class="chart-header" style="flex-wrap:wrap;gap:10px">
             <div>
-              <h3 id="sfTicketDetailTitle">📋 Detail Tiket SimFast</h3>
-              <p style="color:#94a3b8;font-size:0.75rem;margin-top:3px">Gel. = Gelombang implementasi SimFast · Diurutkan tanggal terbaru</p>
+              <h3>📋 Kategori × Root Cause × Bulan
+                <span id="sfCatRCPeriod" style="font-size:0.75rem;color:#94a3b8;font-weight:400;margin-left:8px"></span>
+              </h3>
+              <p style="color:#94a3b8;font-size:0.74rem;margin-top:3px">Setiap kategori memiliki 3 baris: People · Process · System · Ikuti Slicer</p>
             </div>
-            <button onclick="document.getElementById('sfTicketDetailCard').style.display='none';window._sfClickedCat=null" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;padding:6px 16px;border-radius:8px;cursor:pointer;font-size:0.82rem;margin-left:auto">✕ Tutup</button>
+            <button onclick="window._sfExportCatRCXLS()" style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);color:#6ee7b7;padding:5px 14px;border-radius:8px;cursor:pointer;font-size:0.78rem;margin-left:auto;white-space:nowrap">📊 Export XLS</button>
           </div>
-          <div class="table-container" style="max-height:520px">
-            <table class="data-table" style="font-size:0.81rem">
-              <thead><tr>
-                <th style="width:30px;text-align:center">#</th>
-                <th style="width:70px;text-align:center">Gel.</th>
-                <th style="min-width:100px">Cabang</th>
-                <th style="white-space:nowrap">Tgl. Submit</th>
-                <th>ID</th>
-                <th style="min-width:160px">Summary</th>
-                <th style="min-width:100px">Root Cause</th>
-                <th>Status</th>
-                <th style="text-align:right">SLA</th>
-              </tr></thead>
-              <tbody id="sfTicketDetailBody"></tbody>
+          <div class="table-container" style="max-height:600px;overflow-x:auto">
+            <table class="data-table" style="font-size:0.8rem;min-width:600px">
+              <thead id="sfCatRCHead"></thead>
+              <tbody id="sfCatRCBody"></tbody>
             </table>
           </div>
         </div>
 
       </section>
+
+      <!-- ===== SLA
 
       <!-- ===== SLA ===== -->
       <section class="section" id="section-sla">
@@ -498,11 +517,12 @@
         <div class="table-container">
           <table class="data-table" id="ticketTable">
             <thead><tr>
+                <th style="width:32px;text-align:center">#</th>
               <th class="sortable" data-col="Id">ID <span class="sort-icon">↕</span></th>
               <th class="sortable" data-col="Date Submitted">Tanggal <span class="sort-icon">↕</span></th>
               <th>Summary</th><th>Kategori</th><th>Produk</th>
               <th class="sortable" data-col="Status">Status <span class="sort-icon">↕</span></th>
-              <th>Root Cause</th><th>SLA</th><th>Cabang</th>
+              <th>Root Cause</th><th>SLA</th><th>Cabang</th><th style="width:60px">Gel</th>
             </tr></thead>
             <tbody id="ticketTableBody"></tbody>
           </table>

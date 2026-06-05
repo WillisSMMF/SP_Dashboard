@@ -724,11 +724,24 @@ function renderTicketTable(){
     feedback:`<span class="badge badge-pending">feedback</span>`,
     closed:`<span class="badge" style="background:rgba(148,163,184,0.15);color:#94a3b8">closed</span>`,
   };
-  tableBodyEl.innerHTML=page.map(r=>{
+  tableBodyEl.innerHTML=page.map((r,i)=>{
     const sla=parseFloat(r.SLA);
     const slaClass=isNaN(sla)?'':sla<=1?'sla-good':sla<=3?'sla-warn':'sla-bad';
     const statusBadge=statusMap[(r.Status||'').toLowerCase()]||`<span class="badge">${r.Status||'-'}</span>`;
+    // Gel column: only for SimFast/Simascore
+    const prod=r['Product Source']||'';
+    let gelHtml='<td style="text-align:center">—</td>';
+    if(prod==='SimFast'||prod==='Simascore'){
+      if(r._sfGel!==undefined){
+        gelHtml=`<td style="text-align:center"><span style="background:${PALETTE.primary}1a;color:${PALETTE.primary};padding:2px 7px;border-radius:10px;font-size:0.74rem;font-weight:700">Gel ${r._sfGel}</span></td>`;
+      } else {
+        const info=getMasterInfo(branchField(r));
+        const gel=info&&info.gel!==''?info.gel:'?';
+        gelHtml=`<td style="text-align:center"><span style="background:${PALETTE.primary}1a;color:${PALETTE.primary};padding:2px 7px;border-radius:10px;font-size:0.74rem;font-weight:700">Gel ${gel}</span></td>`;
+      }
+    }
     return `<tr>
+      <td style="text-align:center;color:#64748b;font-size:0.75rem">${(currentPage-1)*PAGE_SIZE+i+1}</td>
       <td><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary}">#${r.Id}</a></td>
       <td style="white-space:nowrap;font-size:0.78rem">${(r['Date Submitted']||'').split(' ')[0]||'-'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Summary||''}">${r.Summary||'-'}</td>
@@ -736,8 +749,9 @@ function renderTicketTable(){
       <td><span class="badge" style="background:${PALETTE.primary}22;color:${PALETTE.primary}">${r['Product Source']||'-'}</span></td>
       <td>${statusBadge}</td>
       <td style="font-size:0.78rem">${r['Root Cause']||'-'}</td>
-      <td><span class="${slaClass}">${isNaN(sla)?'-':sla+' hr'}</span></td>
+      <td><span class="${slaClass}">${isNaN(sla)?'-':sla===1?'1 day':sla+' days'}</span></td>
       <td style="font-size:0.78rem">${r['Branch Name']||r.Branch||'-'}</td>
+      ${gelHtml}
     </tr>`;
   }).join('');
   renderPagination(data.length);
@@ -1917,92 +1931,227 @@ document.getElementById('exportPDF').addEventListener('click', () => exportPDF()
 // ===================================================================
 // ===== OVERVIEW SIMFAST SECTION ====================================
 // ===================================================================
-let _sfClickedCat=null;
+const SF_RC=['People','Process','System'];
+const SF_RC_COLORS={People:'#f43f5e',Process:'#f59e0b',System:'#6366f1'};
+const SF_RC_LIGHT={People:'#f43f5e44',Process:'#f59e0b44',System:'#6366f144'};
+let _sfTrendRC='All';          // RC filter for trend line
+let _sfDetailMonthFilter=null; // clicked month key
+let _sfDetailRCFilter=null;    // clicked KPI RC
+
+// Count active SimFast branches at end of selected period
+function _sfCountActiveBranches(){
+  const months=filterState.months;
+  let cutoff=new Date();
+  if(months&&months.length){
+    const sorted=[...months].sort((a,b)=>{
+      const p=s=>{const q=s.split(' ');return(q.length>1?+q[0]:9999)*100+MONTH_ORDER.indexOf(q[q.length-1]);};
+      return p(b)-p(a);
+    });
+    const parts=sorted[0].split(' ');
+    const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
+    if(yr&&mo>=0)cutoff=new Date(yr,mo+1,0);
+  }
+  return[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=cutoff).length;
+}
 
 function renderOverviewSimfast(){
-  // Only render when section is visible (Chart.js needs visible canvas)
   const sec=document.getElementById('section-simfast');
   if(!sec||!sec.classList.contains('active'))return;
   const data=filteredSFData;
   _renderSfKpi(data);
   _renderSfTrendChart(data);
   _renderSfMonthBreakdown(data);
-  _renderSfCategoryChart(data);
-  _renderSfCategoryRCTable(data);
-  if(_sfClickedCat) _renderSfTicketDetail(_sfClickedCat);
+  _renderSfDetailTable();
+  _renderSfCategoryStackedChart(data);
+  _renderSfRCPieChart(data);
+  _renderSfCatRCMonthTable(data);
 }
 
+// ── KPI ──────────────────────────────────────────────────────────────
 function _renderSfKpi(data){
   const total=data.length;
-  const resolved=data.filter(r=>r.Status==='resolved').length;
-  const branches=[...new Set(data.map(r=>branchField(r)).filter(Boolean))].length;
-  const ddCount=filteredDDData.filter(r=>r.Status==='MUF-Drawdown').length;
+  const activeBr=_sfCountActiveBranches();
+  const people=data.filter(r=>r['Root Cause']==='People').length;
+  const process=data.filter(r=>r['Root Cause']==='Process').length;
+  const system=data.filter(r=>r['Root Cause']==='System').length;
   const e=id=>document.getElementById(id);
   if(e('sfKpiTotal'))e('sfKpiTotal').textContent=total.toLocaleString();
-  if(e('sfKpiResolved'))e('sfKpiResolved').textContent=resolved.toLocaleString();
-  if(e('sfKpiBranch'))e('sfKpiBranch').textContent=branches;
-  if(e('sfKpiDD'))e('sfKpiDD').textContent=ddCount.toLocaleString();
-  if(e('sfKpiRate'))e('sfKpiRate').textContent=total>0?((resolved/total)*100).toFixed(1)+'%':'0%';
+  if(e('sfKpiBranch'))e('sfKpiBranch').textContent=activeBr;
+  if(e('sfKpiPeople'))e('sfKpiPeople').textContent=people;
+  if(e('sfKpiProcess'))e('sfKpiProcess').textContent=process;
+  if(e('sfKpiSystem'))e('sfKpiSystem').textContent=system;
+  // Highlight active KPI filter
+  ['People','Process','System'].forEach(rc=>{
+    const card=document.getElementById(`sfKpiCard${rc}`);
+    if(card)card.style.borderColor=_sfDetailRCFilter===rc?SF_RC_COLORS[rc]:'rgba(255,255,255,0.07)';
+  });
 }
+window._sfKpiRCClick=function(rc){
+  _sfDetailRCFilter=_sfDetailRCFilter===rc?null:rc;
+  _sfDetailMonthFilter=null;
+  _renderSfKpi(filteredSFData);
+  _renderSfDetailTable();
+  const el=document.getElementById('sfDetailTableCard');
+  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+};
 
+// ── MONTH KEYS ────────────────────────────────────────────────────────
 function _sfGetMonthKeys(data){
-  const keyMap={};
-  data.forEach(r=>{const k=getRowMonthKey(r);if(k)keyMap[k]=1;});
-  return Object.keys(keyMap).sort((a,b)=>{
+  const map={};
+  data.forEach(r=>{const k=getRowMonthKey(r);if(k)map[k]=1;});
+  return Object.keys(map).sort((a,b)=>{
     const p=s=>{const q=s.split(' ');return(q.length>1?+q[0]:9999)*100+MONTH_ORDER.indexOf(q[q.length-1]);};
     return p(a)-p(b);
   });
 }
 
+// Short month label: "2026 January" → "Jan '26"
+function _sfShortMonth(k){
+  const p=k.split(' ');
+  return p.length>1?`${p[1].slice(0,3)} '${p[0].slice(2)}`:k.slice(0,3);
+}
+
+// ── TREND CHART ───────────────────────────────────────────────────────
 function _renderSfTrendChart(data){
   const keys=_sfGetMonthKeys(data);
-  const totals=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k).length);
-  const mean=totals.length?totals.reduce((a,b)=>a+b,0)/totals.length:0;
-  const meanArr=totals.map(()=>+mean.toFixed(1));
+  const byKey=k=>data.filter(r=>getRowMonthKey(r)===k);
+  const peopleCounts=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='People').length);
+  const processCounts=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='Process').length);
+  const systemCounts=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='System').length);
+  const totalCounts=keys.map((_,i)=>peopleCounts[i]+processCounts[i]+systemCounts[i]);
 
-  const pctPlugin={id:'sfPct',afterDraw(chart){
-    if(totals.length<2)return;
-    const ctx=chart.ctx,meta=chart.getDatasetMeta(0);
-    totals.forEach((v,i)=>{
-      if(i===0||!meta.data[i])return;
-      const prev=totals[i-1];if(!prev)return;
-      const pct=((v-prev)/prev*100).toFixed(1);
-      const sign=v>prev?'+':'';
-      const col=v>prev?'#f43f5e':v<prev?'#10b981':'#94a3b8';
-      ctx.save();ctx.font='bold 10px Inter,sans-serif';ctx.fillStyle=col;
-      ctx.textAlign='center';ctx.textBaseline='bottom';
-      ctx.fillText(`${sign}${pct}%`,meta.data[i].x,meta.data[i].y-3);ctx.restore();
+  const trendSource=_sfTrendRC==='People'?peopleCounts:_sfTrendRC==='Process'?processCounts:_sfTrendRC==='System'?systemCounts:totalCounts;
+  const trendColor=_sfTrendRC==='People'?SF_RC_COLORS.People:_sfTrendRC==='Process'?SF_RC_COLORS.Process:_sfTrendRC==='System'?SF_RC_COLORS.System:PALETTE.amber;
+
+  // label inside bar plugin
+  const insideLabel={id:'sfInsLbl',afterDraw(chart){
+    const ctx=chart.ctx;
+    chart.data.datasets.forEach((ds,di)=>{
+      if(ds.type==='line')return;
+      const meta=chart.getDatasetMeta(di);
+      meta.data.forEach((bar,i)=>{
+        const v=ds.data[i];if(!v||v<1)return;
+        const h=Math.abs((bar.base||0)-bar.y);if(h<14)return;
+        ctx.save();ctx.font='bold 9px Inter,sans-serif';ctx.fillStyle='#f1f5f9';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(v,bar.x,(bar.y+(bar.base||0))/2);ctx.restore();
+      });
     });
   }};
 
   destroyChart('sfTrend');
   const el=document.getElementById('sfTrendChart');if(!el)return;
   charts.sfTrend=new Chart(el.getContext('2d'),{
-    type:'bar',plugins:[pctPlugin],
+    type:'bar',plugins:[insideLabel],
     data:{labels:keys,datasets:[
-      {label:'Total Tiket SimFast',data:totals,backgroundColor:PALETTE.primary+'88',borderColor:PALETTE.primary,borderWidth:2,borderRadius:6,order:2},
-      {label:`Rata-rata (${mean.toFixed(1)})`,data:meanArr,type:'line',borderColor:PALETTE.amber,backgroundColor:'transparent',borderWidth:2,borderDash:[7,4],tension:0,pointRadius:0,order:1}
+      {label:'People',data:peopleCounts,backgroundColor:SF_RC_LIGHT.People,borderColor:SF_RC_COLORS.People,borderWidth:1.5,stack:'rc',order:3},
+      {label:'Process',data:processCounts,backgroundColor:SF_RC_LIGHT.Process,borderColor:SF_RC_COLORS.Process,borderWidth:1.5,stack:'rc',order:4},
+      {label:'System',data:systemCounts,backgroundColor:SF_RC_LIGHT.System,borderColor:SF_RC_COLORS.System,borderWidth:1.5,stack:'rc',order:5},
+      {label:`Tren: ${_sfTrendRC}`,data:trendSource,type:'line',borderColor:trendColor,backgroundColor:'transparent',borderWidth:2.5,tension:0.35,pointRadius:4,pointBackgroundColor:trendColor,pointBorderColor:'#0f172a',pointBorderWidth:2,order:1}
     ]},
-    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},
-      plugins:{legend:{position:'top'},
-        tooltip:{callbacks:{afterBody(items){
-          const i=items[0].dataIndex;
-          if(i>0&&totals[i-1]){const pct=((totals[i]-totals[i-1])/totals[i-1]*100).toFixed(1);const sign=totals[i]>=totals[i-1]?'+':'';return[`Δ MoM: ${sign}${pct}%`];}
-          return[];
-        }}}
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:8}},
+      plugins:{
+        legend:{position:'top',labels:{font:{size:10},usePointStyle:true,padding:12}},
+        tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8',
+          callbacks:{
+            title(items){return items[0].label;},
+            beforeBody(items){
+              const k=items[0].label;
+              const kRows=data.filter(r=>getRowMonthKey(r)===k);
+              const p=kRows.filter(r=>r['Root Cause']==='People').length;
+              const pr=kRows.filter(r=>r['Root Cause']==='Process').length;
+              const s=kRows.filter(r=>r['Root Cause']==='System').length;
+              const gelMap={};
+              kRows.forEach(r=>{const g=r._sfGel!==undefined?`Gel ${r._sfGel}`:'Lainnya';gelMap[g]=(gelMap[g]||new Set()).add(branchField(r));});
+              const gelLines=Object.entries(gelMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([g,bs])=>`  ${g}: ${bs.size} cabang`);
+              return[`Total: ${kRows.length}  |  People: ${p}  Process: ${pr}  System: ${s}`,'─────────',...gelLines,'─────────'];
+            }
+          }
+        }
       },
-      scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}
+      scales:{
+        x:{stacked:true,grid:{display:false},ticks:{font:{size:10}}},
+        y:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}
+      },
+      onClick(evt,elements){
+        if(!elements.length)return;
+        const k=keys[elements[0].index];
+        _sfDetailMonthFilter=_sfDetailMonthFilter===k?null:k;
+        _sfDetailRCFilter=null;
+        _renderSfDetailTable();
+        const el=document.getElementById('sfDetailTableCard');
+        if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+      }
     }
   });
-}
 
+  // Render RC filter buttons
+  const btnWrap=document.getElementById('sfTrendRCBtns');
+  if(btnWrap){
+    btnWrap.innerHTML=['All',...SF_RC].map(rc=>`<button onclick="window._sfSetTrendRC('${rc}')" style="padding:4px 12px;border-radius:20px;border:none;cursor:pointer;font-size:0.77rem;font-weight:600;transition:all 0.15s;background:${_sfTrendRC===rc?(rc==='All'?PALETTE.amber:SF_RC_COLORS[rc]):'rgba(255,255,255,0.08)'};color:${_sfTrendRC===rc?'#0f172a':'#94a3b8'}">${rc}</button>`).join('');
+  }
+}
+window._sfSetTrendRC=function(rc){_sfTrendRC=rc;_renderSfTrendChart(filteredSFData);};
+
+// ── DETAIL TABLE ──────────────────────────────────────────────────────
+function _renderSfDetailTable(){
+  const card=document.getElementById('sfDetailTableCard');
+  const thead=document.getElementById('sfDetailThead');
+  const tbody=document.getElementById('sfDetailTbody');
+  const title=document.getElementById('sfDetailTitle');
+  if(!tbody)return;
+
+  let rows=[...filteredSFData];
+  if(_sfDetailMonthFilter)rows=rows.filter(r=>getRowMonthKey(r)===_sfDetailMonthFilter);
+  if(_sfDetailRCFilter)rows=rows.filter(r=>r['Root Cause']===_sfDetailRCFilter);
+
+  // Sort: Gel → Cabang → Root Cause → Date
+  rows.sort((a,b)=>{
+    const ga=String(a._sfGel??'9'),gb=String(b._sfGel??'9');
+    if(ga!==gb)return ga.localeCompare(gb,undefined,{numeric:true});
+    const ba=branchField(a),bb=branchField(b);
+    if(ba!==bb)return ba.localeCompare(bb);
+    const ra=a['Root Cause']||'',rb=b['Root Cause']||'';
+    if(ra!==rb)return ra.localeCompare(rb);
+    return(parseIssueDate(a['Date Submitted'])||0)-(parseIssueDate(b['Date Submitted'])||0);
+  });
+
+  const filterLabel=(_sfDetailMonthFilter||_sfDetailRCFilter)?[_sfDetailMonthFilter,_sfDetailRCFilter].filter(Boolean).join(' · '):'Semua';
+  if(title)title.textContent=`📋 Detail Tiket SimFast — ${filterLabel} (${rows.length} tiket)`;
+
+  tbody.innerHTML=rows.map((r,i)=>{
+    const gel=r._sfGel!==undefined?`Gel ${r._sfGel}`:'—';
+    const gelColor=r._sfGel!==undefined?SF_RC_COLORS[r['Root Cause']]||PALETTE.primary:'#64748b';
+    const rc=r['Root Cause']||'-';
+    const rcColor=SF_RC_COLORS[rc]||'#94a3b8';
+    const ds=r['Date Submitted'];
+    const dateStr=ds instanceof Date?ds.toLocaleDateString('id-ID'):String(ds||'').split(' ')[0];
+    return`<tr>
+      <td style="text-align:center;color:#64748b;font-size:0.75rem;padding:5px 6px">${i+1}</td>
+      <td style="text-align:center;padding:5px 6px"><span style="background:${PALETTE.primary}1a;color:${PALETTE.primary};padding:2px 7px;border-radius:10px;font-size:0.75rem;font-weight:700;white-space:nowrap">${gel}</span></td>
+      <td style="font-size:0.79rem;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 6px" title="${branchField(r)}">${branchField(r)}</td>
+      <td style="white-space:nowrap;font-size:0.76rem;padding:5px 6px">${dateStr}</td>
+      <td style="padding:5px 6px"><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary};font-size:0.78rem">#${r.Id}</a></td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.78rem;padding:5px 6px" title="${r.Summary||''}">${r.Summary||'-'}</td>
+      <td style="font-size:0.77rem;padding:5px 6px">${r.Category||'-'}</td>
+      <td style="font-size:0.77rem;padding:5px 6px"><span style="color:${PALETTE.primary};background:${PALETTE.primary}1a;padding:2px 7px;border-radius:8px;font-size:0.74rem">${r['Product Source']||'-'}</span></td>
+      <td style="padding:5px 6px;font-size:0.77rem"><span style="color:${rcColor};font-weight:700">${rc}</span></td>
+      <td style="font-size:0.77rem;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 6px" title="${branchField(r)}">${branchField(r)}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="10" style="text-align:center;color:#64748b;padding:16px">Tidak ada tiket</td></tr>';
+
+  if(_sfDetailMonthFilter||_sfDetailRCFilter){const btn=document.getElementById('sfDetailClearBtn');if(btn)btn.style.display='inline-flex';}
+  else{const btn=document.getElementById('sfDetailClearBtn');if(btn)btn.style.display='none';}
+}
+window._sfClearDetailFilter=function(){_sfDetailMonthFilter=null;_sfDetailRCFilter=null;_renderSfDetailTable();};
+
+// ── MONTH BREAKDOWN TABLE ─────────────────────────────────────────────
 function _renderSfMonthBreakdown(data){
   const el=document.getElementById('sfMonthBreakdownBody');if(!el)return;
   const keys=_sfGetMonthKeys(data);
   if(!keys.length){el.innerHTML='<tr><td colspan="5" style="text-align:center;color:#64748b;padding:10px">Tidak ada data</td></tr>';return;}
   const totals=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k).length);
   const mean=totals.reduce((a,b)=>a+b,0)/totals.length;
-
   el.innerHTML=keys.map((k,i)=>{
     const count=totals[i];
     const prev=i>0?totals[i-1]:null;
@@ -2011,103 +2160,161 @@ function _renderSfMonthBreakdown(data){
       const pct=((count-prev)/prev*100).toFixed(1);
       const sign=count>prev?'+':'';
       const c=count>prev?'#f43f5e':count<prev?'#10b981':'#94a3b8';
-      momHtml=`<span style="color:${c};font-weight:600">${sign}${pct}%</span>`;
+      momHtml=`<span style="color:${c};font-weight:600;white-space:nowrap">${sign}${pct}%</span>`;
     }
-    // Count active SimFast branches for this month
-    const [yearStr,monthName]=(k+' ').split(' ');
-    const yr=parseInt(yearStr),mo=MONTH_ORDER.indexOf(monthName);
+    const parts=k.split(' ');
+    const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
     const monthEnd=yr&&mo>=0?new Date(yr,mo+1,0):null;
-    const activeBranches=monthEnd?[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=monthEnd).length:'-';
+    const activeBr=monthEnd?[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=monthEnd).length:'—';
     const avgColor=count>mean?'#f43f5e':'#10b981';
     return`<tr>
       <td style="padding:5px 8px;white-space:nowrap;font-size:0.78rem">${k}</td>
       <td style="text-align:right;font-weight:700;color:#f1f5f9;padding:5px 6px">${count}</td>
       <td style="text-align:right;font-size:0.77rem;color:${avgColor};padding:5px 6px" title="Mean semua bulan">${mean.toFixed(1)}</td>
       <td style="text-align:right;padding:5px 8px">${momHtml}</td>
-      <td style="text-align:right;font-size:0.77rem;color:#94a3b8;padding:5px 8px" title="Cabang SimFast aktif">${activeBranches}</td>
+      <td style="text-align:right;font-size:0.77rem;color:#94a3b8;padding:5px 8px">${activeBr}</td>
     </tr>`;
   }).join('');
 }
 
-function _renderSfCategoryChart(data){
-  const entries=topN(countBy(data,'Category'),10);
+// ── TOP KATEGORI STACKED ──────────────────────────────────────────────
+function _renderSfCategoryStackedChart(data){
+  const cats=Object.entries(
+    data.reduce((acc,r)=>{acc[r.Category||'Lainnya']=(acc[r.Category||'Lainnya']||0)+1;return acc;},{}))
+    .sort((a,b)=>b[1]-a[1]).slice(0,10).map(x=>x[0]);
+
+  const insideLabel={id:'sfCatInsLbl',afterDraw(chart){
+    const ctx=chart.ctx;
+    chart.data.datasets.forEach((ds,di)=>{
+      const meta=chart.getDatasetMeta(di);
+      meta.data.forEach((bar,i)=>{
+        const v=ds.data[i];if(!v||v<1)return;
+        const h=Math.abs((bar.base||0)-bar.x);if(h<18)return;
+        ctx.save();ctx.font='bold 9px Inter,sans-serif';ctx.fillStyle='#f1f5f9';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(v,(bar.x+(bar.base||0))/2,bar.y);ctx.restore();
+      });
+    });
+  }};
+
   destroyChart('sfCategory');
   const el=document.getElementById('sfCategoryChart');if(!el)return;
-  charts.sfCategory=new Chart(el.getContext('2d'),{type:'bar',
-    data:{labels:entries.map(x=>x[0]),datasets:[{data:entries.map(x=>x[1]),backgroundColor:MULTI.map(c=>c+'cc'),borderColor:MULTI,borderWidth:2,borderRadius:6}]},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+  charts.sfCategory=new Chart(el.getContext('2d'),{
+    type:'bar',plugins:[insideLabel],
+    data:{labels:cats,datasets:SF_RC.map(rc=>({
+      label:rc,
+      data:cats.map(cat=>data.filter(r=>(r.Category||'Lainnya')===cat&&r['Root Cause']===rc).length),
+      backgroundColor:SF_RC_LIGHT[rc],borderColor:SF_RC_COLORS[rc],borderWidth:1.5,stack:'s'
+    }))},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{position:'top',labels:{font:{size:10},usePointStyle:true}},
+        tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8'}},
+      scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}}}});
 }
 
-function _renderSfCategoryRCTable(data){
-  const thead=document.getElementById('sfCategoryRCHead');
-  const tbody=document.getElementById('sfCategoryRCBody');
+// ── PIE CHART ROOT CAUSE ─────────────────────────────────────────────
+function _renderSfRCPieChart(data){
+  const counts=SF_RC.map(rc=>data.filter(r=>r['Root Cause']===rc).length);
+  const other=data.filter(r=>!SF_RC.includes(r['Root Cause'])).length;
+  destroyChart('sfRCPie');
+  const el=document.getElementById('sfRCPieChart');if(!el)return;
+  charts.sfRCPie=new Chart(el.getContext('2d'),{type:'doughnut',
+    data:{labels:[...SF_RC,'Lainnya'],datasets:[{data:[...counts,other],
+      backgroundColor:[...Object.values(SF_RC_LIGHT),'rgba(148,163,184,0.3)'],
+      borderColor:[...Object.values(SF_RC_COLORS),'#94a3b8'],borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true}},
+        tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8'}}}});
+}
+
+// ── CATEGORY × RC × MONTH TABLE ──────────────────────────────────────
+function _renderSfCatRCMonthTable(data){
+  const keys=_sfGetMonthKeys(data);
+  const cats=Object.entries(
+    data.reduce((acc,r)=>{const c=r.Category||'(Kosong)';acc[c]=(acc[c]||0)+1;return acc;},{}))
+    .sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+
+  // Period label
+  const period=keys.length===0?'Semua Periode':keys.length===1?keys[0]:`${keys[0]} – ${keys[keys.length-1]}`;
+  const periEl=document.getElementById('sfCatRCPeriod');if(periEl)periEl.textContent=period;
+
+  const thead=document.getElementById('sfCatRCHead');
+  const tbody=document.getElementById('sfCatRCBody');
   if(!thead||!tbody)return;
 
-  // Build matrix: categories × root causes
-  const cats=[...new Set(data.map(r=>r.Category||'').filter(Boolean))].sort();
-  const rcs=[...new Set(data.map(r=>r['Root Cause']||'').filter(Boolean))];
-  // Sort RCs by frequency
-  const rcCount={};rcs.forEach(rc=>{rcCount[rc]=data.filter(r=>r['Root Cause']===rc).length;});
-  const topRCs=Object.entries(rcCount).sort((a,b)=>b[1]-a[1]).slice(0,8).map(x=>x[0]);
-
   thead.innerHTML=`<tr>
-    <th style="min-width:160px">Kategori</th>
-    ${topRCs.map(rc=>`<th style="text-align:right;min-width:80px;font-size:0.77rem" title="${rc}">${rc.length>14?rc.slice(0,12)+'…':rc}</th>`).join('')}
-    <th style="text-align:right;min-width:60px">Total</th>
-  </tr>`;
+    <th rowspan="2" style="min-width:150px;vertical-align:middle;border-right:1px solid rgba(255,255,255,0.08)">Kategori</th>
+    <th rowspan="2" style="min-width:70px;vertical-align:middle">Root Cause</th>
+    ${keys.map(k=>`<th style="text-align:right;min-width:50px;font-size:0.76rem;white-space:nowrap">${_sfShortMonth(k)}</th>`).join('')}
+    <th rowspan="2" style="text-align:right;min-width:54px;vertical-align:middle;font-weight:800;border-left:1px solid rgba(255,255,255,0.08)">Total</th>
+  </tr><tr>${keys.map(()=>'<th></th>').join('')}</tr>`;
 
-  tbody.innerHTML=cats.map(cat=>{
-    const catRows=data.filter(r=>r.Category===cat);
-    const cells=topRCs.map(rc=>{
-      const n=catRows.filter(r=>r['Root Cause']===rc).length;
-      return `<td style="text-align:right;color:${n>0?'#f1f5f9':'#334155'};font-weight:${n>0?700:400}">${n||'—'}</td>`;
-    }).join('');
-    const total=catRows.length;
-    return`<tr style="cursor:pointer" onclick="window._sfCatClick('${cat.replace(/'/g,"\\'")}')" title="Klik untuk detail tiket ${cat}">
-      <td style="font-weight:600;font-size:0.82rem;color:${PALETTE.primary}">${cat}</td>
-      ${cells}
-      <td style="text-align:right;font-weight:700;color:${PALETTE.amber}">${total}</td>
-    </tr>`;
-  }).join('')||'<tr><td colspan="20" style="text-align:center;color:#64748b;padding:12px">Tidak ada data</td></tr>';
+  const rows=[];
+  cats.forEach(cat=>{
+    const catRows=data.filter(r=>(r.Category||'(Kosong)')===cat);
+    SF_RC.forEach((rc,ri)=>{
+      const rcRows=catRows.filter(r=>r['Root Cause']===rc);
+      const mCounts=keys.map(k=>rcRows.filter(r=>getRowMonthKey(r)===k).length);
+      const total=rcRows.length;
+      rows.push(`<tr style="${ri===2?'border-bottom:2px solid rgba(255,255,255,0.1)':''}">
+        ${ri===0?`<td rowspan="3" style="font-weight:700;font-size:0.8rem;vertical-align:middle;border-right:1px solid rgba(255,255,255,0.06);padding:5px 8px">${cat}</td>`:''}
+        <td style="font-size:0.76rem;font-weight:700;color:${SF_RC_COLORS[rc]};padding:4px 8px;white-space:nowrap">${rc}</td>
+        ${mCounts.map(n=>`<td style="text-align:right;font-size:0.78rem;color:${n>0?'#f1f5f9':'#334155'};font-weight:${n>0?700:400};padding:4px 5px">${n||'—'}</td>`).join('')}
+        <td style="text-align:right;font-weight:800;font-size:0.8rem;color:${SF_RC_COLORS[rc]};padding:4px 8px;border-left:1px solid rgba(255,255,255,0.06)">${total||'—'}</td>
+      </tr>`);
+    });
+  });
+  tbody.innerHTML=rows.join('')||'<tr><td colspan="100" style="text-align:center;color:#64748b;padding:14px">Tidak ada data</td></tr>';
 }
 
-// Global click handler untuk category RC table
-window._sfCatClick=function(cat){
-  _sfClickedCat=cat;
-  _renderSfTicketDetail(cat);
-  const card=document.getElementById('sfTicketDetailCard');
-  if(card){card.style.display='block';card.scrollIntoView({behavior:'smooth',block:'start'});}
+// ── EXPORTS ────────────────────────────────────────────────────────────
+window._sfExportCatRCXLS=function(){
+  const data=filteredSFData;
+  const keys=_sfGetMonthKeys(data);
+  const cats=Object.entries(data.reduce((acc,r)=>{const c=r.Category||'(Kosong)';acc[c]=(acc[c]||0)+1;return acc;},{})).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+  const period=keys.length===0?'Semua':keys.length===1?keys[0]:`${keys[0]}-${keys[keys.length-1]}`;
+  const header=['Kategori','Root Cause',...keys.map(k=>_sfShortMonth(k)),'Total'];
+  const rows=[header];
+  cats.forEach(cat=>{
+    const catRows=data.filter(r=>(r.Category||'(Kosong)')===cat);
+    SF_RC.forEach(rc=>{
+      const rcRows=catRows.filter(r=>r['Root Cause']===rc);
+      rows.push([cat,rc,...keys.map(k=>rcRows.filter(r=>getRowMonthKey(r)===k).length),rcRows.length]);
+    });
+    rows.push(['','','─'.repeat(10)]);
+  });
+  try{
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb,ws,'Kategori RC');
+    XLSX.writeFile(wb,`SimFast_CatRC_${period.replace(/\s+/g,'_')}.xlsx`);
+  }catch(e){alert('Export gagal: '+e.message);}
 };
 
-function _renderSfTicketDetail(cat){
-  const titleEl=document.getElementById('sfTicketDetailTitle');
-  const bodyEl=document.getElementById('sfTicketDetailBody');
-  if(!titleEl||!bodyEl)return;
-  const rows=filteredSFData.filter(r=>r.Category===cat).sort((a,b)=>{
-    const da=parseIssueDate(a['Date Submitted']),db=parseIssueDate(b['Date Submitted']);
-    return (db||0)-(da||0);
+window._sfExportDetailXLS=function(){
+  const data=filteredSFData;
+  const filterLabel=(_sfDetailMonthFilter||_sfDetailRCFilter)?[_sfDetailMonthFilter,_sfDetailRCFilter].filter(Boolean).join('_'):'Semua';
+  let rows=[...data];
+  if(_sfDetailMonthFilter)rows=rows.filter(r=>getRowMonthKey(r)===_sfDetailMonthFilter);
+  if(_sfDetailRCFilter)rows=rows.filter(r=>r['Root Cause']===_sfDetailRCFilter);
+  rows.sort((a,b)=>{
+    const ga=String(a._sfGel??'9'),gb=String(b._sfGel??'9');
+    if(ga!==gb)return ga.localeCompare(gb,undefined,{numeric:true});
+    return branchField(a).localeCompare(branchField(b));
   });
-  titleEl.textContent=`📋 Detail Tiket — ${cat} (${rows.length} tiket)`;
-  bodyEl.innerHTML=rows.map((r,i)=>{
-    const sla=parseFloat(r.SLA);
-    const slaStr=isNaN(sla)?'-':(sla===1?'1 day':`${sla} days`);
-    const slaClass=isNaN(sla)?'':sla<=1?'sla-good':sla<=3?'sla-warn':'sla-bad';
-    const gel=r._sfGel!==undefined?r._sfGel:'—';
+  const header=['No','Gel','Cabang','Tanggal','ID','Summary','Kategori','Produk','Root Cause'];
+  const sheetRows=[header,...rows.map((r,i)=>{
     const ds=r['Date Submitted'];
     const dateStr=ds instanceof Date?ds.toLocaleDateString('id-ID'):String(ds||'').split(' ')[0];
-    return`<tr>
-      <td style="text-align:center;color:#64748b;font-size:0.78rem">${i+1}</td>
-      <td style="text-align:center"><span style="background:${PALETTE.primary}22;color:${PALETTE.primary};padding:2px 8px;border-radius:10px;font-size:0.78rem;font-weight:700">Gel ${gel}</span></td>
-      <td style="font-size:0.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${branchField(r)}">${branchField(r)}</td>
-      <td style="white-space:nowrap;font-size:0.78rem">${dateStr}</td>
-      <td><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary}">#${r.Id}</a></td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem" title="${r.Summary||''}">${r.Summary||'-'}</td>
-      <td style="font-size:0.78rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['Root Cause']||'-'}</td>
-      <td><span class="badge badge-${r.Status==='resolved'?'resolved':r.Status==='assigned'?'open':'pending'}" style="font-size:0.72rem">${r.Status||'-'}</span></td>
-      <td style="text-align:right"><span class="${slaClass}">${slaStr}</span></td>
-    </tr>`;
-  }).join('')||'<tr><td colspan="9" style="text-align:center;color:#64748b;padding:12px">Tidak ada tiket</td></tr>';
-}
+    return[i+1,r._sfGel!==undefined?`Gel ${r._sfGel}`:'—',branchField(r),dateStr,r.Id,r.Summary||'',r.Category||'',r['Product Source']||'',r['Root Cause']||''];
+  })];
+  try{
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet(sheetRows);
+    XLSX.utils.book_append_sheet(wb,ws,'Detail Tiket');
+    XLSX.writeFile(wb,`SimFast_Detail_${filterLabel.replace(/\s+/g,'_')}.xlsx`);
+  }catch(e){alert('Export gagal: '+e.message);}
+};
 
 function toggleDrop(id) {
   const panel = document.getElementById(id);
