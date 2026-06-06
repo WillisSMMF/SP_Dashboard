@@ -2421,50 +2421,119 @@ window._sfExportDetailXLS=function(){
   }catch(e){alert('Export gagal: '+e.message);}
 };
 
+// ===== DROPDOWN — TELEPORT APPROACH =====
+// Masalah: backdrop-filter pada topbar membuat position:fixed terurung di dalam topbar.
+// Solusi: saat mobile, PINDAHKAN panel ke document.body (teleport), bukan set fixed di tempat asalnya.
 function toggleDrop(id) {
   const panel = document.getElementById(id);
   if (!panel) return;
-  // Save original inline style once
-  if (panel.dataset.origStyle === undefined) {
+
+  // Simpan inline-style asli sekali saja
+  if (panel.dataset.origStyle === undefined)
     panel.dataset.origStyle = panel.getAttribute('style') || '';
-  }
+
   const isOpen = panel.classList.contains('open');
   _closeAllPanels();
   if (isOpen) return;
 
   if (window.innerWidth < 900) {
-    // Bottom sheet on mobile — always visible regardless of scroll/wrap
-    const maxH = Math.round(window.innerHeight * 0.65);
+    // ── MOBILE: teleport ke <body> ──────────────────────────────────────
+    // Simpan posisi asli di DOM
+    panel._origParent = panel.parentElement;
+    panel._origNext   = panel.nextSibling;
+    document.body.appendChild(panel);           // PINDAHKAN ke body — tidak ada stacking context
+
+    const maxH = Math.round(window.innerHeight * 0.72);
     panel.setAttribute('style',
       `position:fixed!important;bottom:0!important;left:0!important;right:0!important;` +
-      `width:100%!important;max-height:${maxH}px!important;overflow-y:auto!important;` +
-      `z-index:999999!important;border-radius:16px 16px 0 0!important;` +
-      `padding-bottom:env(safe-area-inset-bottom,12px)!important;box-shadow:0 -4px 24px rgba(0,0,0,0.5)!important;`
+      `width:100%!important;max-height:${maxH}px!important;overflow-y:hidden!important;` +
+      `z-index:999999!important;background:#1e293b!important;` +
+      `border-radius:20px 20px 0 0!important;` +
+      `border-top:1px solid rgba(255,255,255,0.12)!important;` +
+      `box-shadow:0 -8px 32px rgba(0,0,0,0.6)!important;`
     );
-    // Show overlay backdrop
+
+    // Inner scroll: hapus batasan max-height agar panel-lah yang scroll
+    panel.querySelectorAll('.ov-dd-scroll').forEach(s => {
+      s._mobileMaxH = s.style.maxHeight;
+      s._mobileOvY  = s.style.overflowY;
+      s.style.maxHeight = `${maxH - 90}px`;
+      s.style.overflowY = 'auto';
+      s.style.webkitOverflowScrolling = 'touch';
+    });
+
+    // Header bar (drag handle + judul + tombol selesai)
+    if (!panel.querySelector('._ddHdr')) {
+      const hdr = document.createElement('div');
+      hdr.className = '_ddHdr';
+      hdr.style.cssText =
+        'position:sticky;top:0;background:#1e293b;z-index:2;padding:0 16px 10px;' +
+        'border-bottom:1px solid rgba(255,255,255,0.08);';
+      hdr.innerHTML =
+        '<div style="width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:10px auto 10px;"></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<span style="font-weight:700;color:#f1f5f9;font-size:0.9rem">Filter</span>' +
+          '<button onclick="_closeAllPanels()" style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 16px;border-radius:20px;cursor:pointer;font-size:0.82rem;font-weight:600;-webkit-tap-highlight-color:transparent">Selesai ✓</button>' +
+        '</div>';
+      panel.insertBefore(hdr, panel.firstChild);
+    }
+
+    // Backdrop gelap
     let bg = document.getElementById('_ddBg');
     if (!bg) {
       bg = document.createElement('div');
       bg.id = '_ddBg';
-      bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999998;';
-      bg.onclick = _closeAllPanels;
       document.body.appendChild(bg);
     }
-    bg.style.display = 'block';
+    bg.style.cssText = 'position:fixed!important;inset:0!important;background:rgba(0,0,0,0.55)!important;z-index:999998!important;';
+    bg.onclick = _closeAllPanels;
+
+    // Cegah scroll body saat bottom sheet terbuka
+    document.body.style.overflow = 'hidden';
+
+  } else {
+    // ── DESKTOP: biarkan posisi absolute seperti biasa ─────────────────
+    panel.setAttribute('style', panel.dataset.origStyle);
   }
+
   panel.classList.add('open');
 }
 
-// Close dropdowns on outside click/tap
-function _closeAllPanels(){
-  document.querySelectorAll('.ov-dd-panel.open').forEach(p=>{
+function _closeAllPanels() {
+  document.querySelectorAll('.ov-dd-panel.open').forEach(p => {
     p.classList.remove('open');
-    if(p.dataset.origStyle!==undefined)p.setAttribute('style',p.dataset.origStyle);
+
+    // Hapus header mobile jika ada
+    const hdr = p.querySelector('._ddHdr');
+    if (hdr) hdr.remove();
+
+    // Restore inner scroll limits
+    p.querySelectorAll('.ov-dd-scroll').forEach(s => {
+      if (s._mobileMaxH !== undefined) { s.style.maxHeight = s._mobileMaxH; delete s._mobileMaxH; }
+      if (s._mobileOvY !== undefined)  { s.style.overflowY = s._mobileOvY;  delete s._mobileOvY; }
+    });
+
+    // Kembalikan ke posisi DOM asli (teleport balik)
+    if (p._origParent) {
+      p._origParent.insertBefore(p, p._origNext || null);
+      delete p._origParent;
+      delete p._origNext;
+    }
+
+    // Restore style asli
+    if (p.dataset.origStyle !== undefined) p.setAttribute('style', p.dataset.origStyle);
     else p.removeAttribute('style');
   });
-  // Hide mobile backdrop
-  const bg=document.getElementById('_ddBg');if(bg)bg.style.display='none';
+
+  // Sembunyikan backdrop
+  const bg = document.getElementById('_ddBg');
+  if (bg) bg.style.display = 'none';
+
+  // Pulihkan scroll body
+  document.body.style.overflow = '';
 }
+
+// Close dropdowns on outside click/tap
 document.addEventListener('click',e=>{
   if(!e.target.closest('.ov-dd-wrap')&&!e.target.closest('.ov-dd-panel'))_closeAllPanels();
 },true);
