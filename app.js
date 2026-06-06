@@ -84,13 +84,23 @@ function getMasterInfo(branchName){
 }
 
 function preprocessSimfastData(){
+  const masterLoaded=masterBranchMap.size>0;
   allData.forEach(r=>{
     const prod=r['Product Source']||'';
     if(prod!=='SimFast'&&prod!=='Simascore'){r._sfActive=false;return;}
+    if(!masterLoaded){
+      // Fallback: tampilkan semua SimFast/Simascore tanpa filter implement date
+      r._sfActive=true; r._sfGel='?'; r._sfWilayah='';
+      return;
+    }
     const issueDate=parseIssueDate(r['Date Submitted']);
     if(!issueDate){r._sfActive=false;return;}
     const info=getMasterInfo(branchField(r));
-    if(!info||!info.implementDate){r._sfActive=false;return;}
+    if(!info||!info.implementDate){
+      // Branch ada di data tapi tidak ada di master → tampilkan saja
+      r._sfActive=true; r._sfGel='?'; r._sfWilayah='';
+      return;
+    }
     r._sfActive=issueDate>=info.implementDate;
     r._sfGel=info.gel;
     r._sfWilayah=info.wilayah;
@@ -98,17 +108,10 @@ function preprocessSimfastData(){
 }
 
 function _rebuildBranchForProduct(){
-  const prod=filterProduct.value;
-  let branches;
-  if(prod==='SimFast'||prod==='Simascore'){
-    branches=[...new Set(allData
-      .filter(r=>(r['Product Source']==='SimFast'||r['Product Source']==='Simascore')&&isSimfastBranch(branchField(r)))
-      .map(r=>branchField(r)).filter(Boolean))].sort();
-  }else{
-    branches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
-  }
+  // Always show ALL branches — Gel filter handles SimFast-specific filtering
+  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
   filterState.branches=[];
-  _buildBranchChecklist(branches,'');
+  _buildBranchChecklist(allBranches,'');
 }
 
 // FIX #6: Fuzzy branch matching — strip common suffixes for matching
@@ -269,9 +272,12 @@ function populateFilters(){
   });
   _buildMonthChecklist(allMonthKeys);
 
-  // Branch dropdown with search
+  // Branch dropdown
   const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
   _buildBranchChecklist(allBranches, '');
+
+  // Gel filter (setelah master data tersedia)
+  _buildGelFilter();
 }
 
 function _buildMonthChecklist(allMonthKeys){
@@ -359,6 +365,56 @@ function _updateBranchLabel(){
 function filterBranchDropdown(val){
   const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
   _buildBranchChecklist(allBranches, val);
+}
+
+// ── GEL FILTER ────────────────────────────────────────────────────────
+function _buildGelFilter(){
+  const panel=document.getElementById('filterGelPanel');if(!panel)return;
+  const gels=[...new Set([...masterBranchMap.values()]
+    .filter(m=>m.hasSimfast&&m.gel!=='').map(m=>String(m.gel)))]
+    .sort((a,b)=>+a-+b);
+
+  panel.innerHTML=`<div class="ov-dd-scroll" style="max-height:240px">
+    <label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px">
+      <input type="radio" name="gelRb" value="" checked><span style="font-weight:600">Semua Gel</span>
+    </label>
+    ${gels.map(g=>`<label class="ov-cb-row">
+      <input type="radio" name="gelRb" value="${g}">
+      <span>Gel ${g}</span>
+    </label>`).join('')}
+  </div>`;
+
+  panel.querySelectorAll('input[name="gelRb"]').forEach(rb=>{
+    rb.onchange=()=>{
+      const gel=rb.value;
+      const lbl=document.getElementById('filterGelLabel');
+      if(lbl)lbl.textContent=gel===''?'Semua Gel':`Gel ${gel}`;
+
+      const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
+      if(gel===''){
+        filterState.branches=[];
+        _buildBranchChecklist(allBranches,'');
+      } else {
+        // Cabang-cabang yg tergabung di gelombang tsb
+        const gelBranchCanons=new Set(
+          [...masterBranchMap.values()]
+            .filter(m=>String(m.gel)===gel&&m.hasSimfast)
+            .map(m=>canonBranch(m.branch))
+        );
+        const matched=allBranches.filter(b=>gelBranchCanons.has(canonBranch(b)));
+        filterState.branches=matched;
+        // Rebuild & update checkboxes
+        _buildBranchChecklist(allBranches,'');
+        document.querySelectorAll('.fbCb').forEach(cb=>{
+          cb.checked=filterState.branches.includes(cb.value);
+        });
+        const allCb=document.getElementById('fbAllCb');
+        if(allCb)allCb.checked=false;
+        _updateBranchLabel();
+      }
+      applyGlobalFilters();
+    };
+  });
 }
 
 // ===== GLOBAL FILTERS =====
@@ -2319,15 +2375,19 @@ window._sfExportDetailXLS=function(){
 function toggleDrop(id) {
   const panel = document.getElementById(id);
   if (!panel) return;
+  // Save original inline style once
+  if (panel.dataset.origStyle === undefined) {
+    panel.dataset.origStyle = panel.getAttribute('style') || '';
+  }
   const isOpen = panel.classList.contains('open');
-  // Close all open panels and reset inline styles
+  // Close all open panels, restore their saved styles
   document.querySelectorAll('.ov-dd-panel.open').forEach(p => {
     p.classList.remove('open');
-    p.removeAttribute('style');
+    if (p.dataset.origStyle !== undefined) p.setAttribute('style', p.dataset.origStyle);
+    else p.removeAttribute('style');
   });
   if (isOpen) return;
-
-  // On mobile: position panel as fixed relative to its trigger button
+  // Mobile: add fixed positioning on top of original styles
   if (window.innerWidth < 900) {
     const btn = panel.previousElementSibling || panel.parentElement.querySelector('button');
     if (btn) {
@@ -2338,29 +2398,26 @@ function toggleDrop(id) {
       if (left + panelW > W - 8) left = W - panelW - 8;
       if (left < 8) left = 8;
       const maxH = Math.min(320, window.innerHeight - r.bottom - 24);
-      panel.style.cssText = `position:fixed!important;top:${r.bottom + 4}px!important;left:${left}px!important;width:${panelW}px!important;max-height:${maxH}px!important;overflow-y:auto!important;z-index:999999!important;`;
+      const origStyle = panel.dataset.origStyle || '';
+      panel.setAttribute('style', origStyle + (origStyle?';':'') +
+        `position:fixed!important;top:${r.bottom+4}px!important;left:${left}px!important;width:${panelW}px!important;max-height:${maxH}px!important;overflow-y:auto!important;z-index:999999!important;`);
     }
   }
   panel.classList.add('open');
 }
 
 // Close dropdowns on outside click/tap
-document.addEventListener('click', e => {
-  if (!e.target.closest('.ov-dd-wrap') && !e.target.closest('.ov-dd-panel')) {
-    document.querySelectorAll('.ov-dd-panel.open').forEach(p => {
-      p.classList.remove('open');
-      p.removeAttribute('style');
-    });
-  }
-}, true);
-
-// Close on scroll (reposition would be complex, just close)
-window.addEventListener('scroll', () => {
-  document.querySelectorAll('.ov-dd-panel.open').forEach(p => {
+function _closeAllPanels(){
+  document.querySelectorAll('.ov-dd-panel.open').forEach(p=>{
     p.classList.remove('open');
-    p.removeAttribute('style');
+    if(p.dataset.origStyle!==undefined)p.setAttribute('style',p.dataset.origStyle);
+    else p.removeAttribute('style');
   });
-}, { passive: true });
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.ov-dd-wrap')&&!e.target.closest('.ov-dd-panel'))_closeAllPanels();
+},true);
+window.addEventListener('scroll',_closeAllPanels,{passive:true});
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => { loadData(); });
