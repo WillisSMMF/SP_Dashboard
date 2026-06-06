@@ -368,53 +368,89 @@ function filterBranchDropdown(val){
 }
 
 // ── GEL FILTER ────────────────────────────────────────────────────────
+let filterState_gels = []; // [] = semua gel
+
 function _buildGelFilter(){
   const panel=document.getElementById('filterGelPanel');if(!panel)return;
   const gels=[...new Set([...masterBranchMap.values()]
     .filter(m=>m.hasSimfast&&m.gel!=='').map(m=>String(m.gel)))]
     .sort((a,b)=>+a-+b);
 
-  panel.innerHTML=`<div class="ov-dd-scroll" style="max-height:240px">
+  if(!gels.length){
+    panel.innerHTML='<div style="padding:10px 12px;color:#64748b;font-size:0.78rem">Master belum dimuat</div>';
+    return;
+  }
+
+  panel.innerHTML=`<div class="ov-dd-scroll" style="max-height:280px">
+    <div style="padding:8px 12px 4px;font-size:0.72rem;color:#64748b;font-weight:600;letter-spacing:0.04em">PILIH GELOMBANG</div>
     <label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px">
-      <input type="radio" name="gelRb" value="" checked><span style="font-weight:600">Semua Gel</span>
+      <input type="checkbox" id="gelAllCb" ${filterState_gels.length===0?'checked':''}><span style="font-weight:600">Semua Gel</span>
     </label>
     ${gels.map(g=>`<label class="ov-cb-row">
-      <input type="radio" name="gelRb" value="${g}">
+      <input type="checkbox" class="gelCb" value="${g}" ${filterState_gels.includes(g)?'checked':''}>
       <span>Gel ${g}</span>
     </label>`).join('')}
   </div>`;
 
-  panel.querySelectorAll('input[name="gelRb"]').forEach(rb=>{
-    rb.onchange=()=>{
-      const gel=rb.value;
-      const lbl=document.getElementById('filterGelLabel');
-      if(lbl)lbl.textContent=gel===''?'Semua Gel':`Gel ${gel}`;
+  // ALL checkbox
+  document.getElementById('gelAllCb').onchange=function(){
+    if(this.checked){
+      filterState_gels=[];
+      document.querySelectorAll('.gelCb').forEach(cb=>cb.checked=true);
+    } else {
+      filterState_gels=[];
+      document.querySelectorAll('.gelCb').forEach(cb=>cb.checked=false);
+    }
+    _applyGelFilter();
+  };
 
-      const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
-      if(gel===''){
-        filterState.branches=[];
-        _buildBranchChecklist(allBranches,'');
-      } else {
-        // Cabang-cabang yg tergabung di gelombang tsb
-        const gelBranchCanons=new Set(
-          [...masterBranchMap.values()]
-            .filter(m=>String(m.gel)===gel&&m.hasSimfast)
-            .map(m=>canonBranch(m.branch))
-        );
-        const matched=allBranches.filter(b=>gelBranchCanons.has(canonBranch(b)));
-        filterState.branches=matched;
-        // Rebuild & update checkboxes
-        _buildBranchChecklist(allBranches,'');
-        document.querySelectorAll('.fbCb').forEach(cb=>{
-          cb.checked=filterState.branches.includes(cb.value);
-        });
-        const allCb=document.getElementById('fbAllCb');
-        if(allCb)allCb.checked=false;
-        _updateBranchLabel();
-      }
-      applyGlobalFilters();
+  // Individual gel checkboxes
+  document.querySelectorAll('.gelCb').forEach(cb=>{
+    cb.onchange=()=>{
+      const checked=Array.from(document.querySelectorAll('.gelCb:checked')).map(x=>x.value);
+      filterState_gels=checked.length===gels.length?[]:checked;
+      const allCb=document.getElementById('gelAllCb');
+      if(allCb)allCb.checked=filterState_gels.length===0;
+      _applyGelFilter();
     };
   });
+
+  _updateGelLabel();
+}
+
+function _updateGelLabel(){
+  const lbl=document.getElementById('filterGelLabel');if(!lbl)return;
+  lbl.textContent=filterState_gels.length===0?'Semua Gel':
+    filterState_gels.length===1?`Gel ${filterState_gels[0]}`:
+    `${filterState_gels.length} Gel`;
+}
+
+function _applyGelFilter(){
+  _updateGelLabel();
+  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
+  if(filterState_gels.length===0){
+    // Reset branch filter
+    filterState.branches=[];
+    _buildBranchChecklist(allBranches,'');
+  } else {
+    // Gabungkan cabang dari semua gel yang dipilih
+    const gelBranchCanons=new Set(
+      [...masterBranchMap.values()]
+        .filter(m=>filterState_gels.includes(String(m.gel))&&m.hasSimfast)
+        .map(m=>canonBranch(m.branch))
+    );
+    const matched=allBranches.filter(b=>gelBranchCanons.has(canonBranch(b)));
+    filterState.branches=matched;
+    _buildBranchChecklist(allBranches,'');
+    // Sync checkboxes
+    document.querySelectorAll('.fbCb').forEach(cb=>{
+      cb.checked=filterState.branches.includes(cb.value);
+    });
+    const allCb=document.getElementById('fbAllCb');
+    if(allCb)allCb.checked=false;
+    _updateBranchLabel();
+  }
+  applyGlobalFilters();
 }
 
 // ===== GLOBAL FILTERS =====
@@ -1994,8 +2030,8 @@ let _sfTrendRC='All';          // RC filter for trend line
 let _sfDetailMonthFilter=null; // clicked month key
 let _sfDetailRCFilter=null;    // clicked KPI RC
 
-// Count active SimFast branches at end of selected period
 function _sfCountActiveBranches(){
+  // Step 1: tentukan cutoff date dari pilihan bulan
   const months=filterState.months;
   let cutoff=new Date();
   if(months&&months.length){
@@ -2007,7 +2043,20 @@ function _sfCountActiveBranches(){
     const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
     if(yr&&mo>=0)cutoff=new Date(yr,mo+1,0);
   }
-  return[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=cutoff).length;
+
+  // Step 2: tentukan set cabang dari Gel/Branch filter
+  const selBranches=filterState.branches; // [] = semua
+
+  return[...masterBranchMap.values()].filter(m=>{
+    if(!m.hasSimfast||!m.implementDate)return false;
+    if(m.implementDate>cutoff)return false;
+    // Jika ada filter Gel/Cabang: hanya hitung cabang yang terpilih
+    if(selBranches.length>0){
+      const matchBranch=selBranches.some(b=>canonBranch(b)===canonBranch(m.branch));
+      if(!matchBranch)return false;
+    }
+    return true;
+  }).length;
 }
 
 function renderOverviewSimfast(){
@@ -2380,28 +2429,28 @@ function toggleDrop(id) {
     panel.dataset.origStyle = panel.getAttribute('style') || '';
   }
   const isOpen = panel.classList.contains('open');
-  // Close all open panels, restore their saved styles
-  document.querySelectorAll('.ov-dd-panel.open').forEach(p => {
-    p.classList.remove('open');
-    if (p.dataset.origStyle !== undefined) p.setAttribute('style', p.dataset.origStyle);
-    else p.removeAttribute('style');
-  });
+  _closeAllPanels();
   if (isOpen) return;
-  // Mobile: add fixed positioning on top of original styles
+
   if (window.innerWidth < 900) {
-    const btn = panel.previousElementSibling || panel.parentElement.querySelector('button');
-    if (btn) {
-      const r = btn.getBoundingClientRect();
-      const W = window.innerWidth;
-      const panelW = Math.min(260, W - 16);
-      let left = r.left;
-      if (left + panelW > W - 8) left = W - panelW - 8;
-      if (left < 8) left = 8;
-      const maxH = Math.min(320, window.innerHeight - r.bottom - 24);
-      const origStyle = panel.dataset.origStyle || '';
-      panel.setAttribute('style', origStyle + (origStyle?';':'') +
-        `position:fixed!important;top:${r.bottom+4}px!important;left:${left}px!important;width:${panelW}px!important;max-height:${maxH}px!important;overflow-y:auto!important;z-index:999999!important;`);
+    // Bottom sheet on mobile — always visible regardless of scroll/wrap
+    const maxH = Math.round(window.innerHeight * 0.65);
+    panel.setAttribute('style',
+      `position:fixed!important;bottom:0!important;left:0!important;right:0!important;` +
+      `width:100%!important;max-height:${maxH}px!important;overflow-y:auto!important;` +
+      `z-index:999999!important;border-radius:16px 16px 0 0!important;` +
+      `padding-bottom:env(safe-area-inset-bottom,12px)!important;box-shadow:0 -4px 24px rgba(0,0,0,0.5)!important;`
+    );
+    // Show overlay backdrop
+    let bg = document.getElementById('_ddBg');
+    if (!bg) {
+      bg = document.createElement('div');
+      bg.id = '_ddBg';
+      bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999998;';
+      bg.onclick = _closeAllPanels;
+      document.body.appendChild(bg);
     }
+    bg.style.display = 'block';
   }
   panel.classList.add('open');
 }
@@ -2413,6 +2462,8 @@ function _closeAllPanels(){
     if(p.dataset.origStyle!==undefined)p.setAttribute('style',p.dataset.origStyle);
     else p.removeAttribute('style');
   });
+  // Hide mobile backdrop
+  const bg=document.getElementById('_ddBg');if(bg)bg.style.display='none';
 }
 document.addEventListener('click',e=>{
   if(!e.target.closest('.ov-dd-wrap')&&!e.target.closest('.ov-dd-panel'))_closeAllPanels();
