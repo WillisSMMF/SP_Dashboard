@@ -337,6 +337,37 @@ body {
   outline: none;
 }
 
+/* ── Native multi-select for Bulan, Cabang, Gel ─────────────────────── */
+.filter-multi {
+  height: auto;
+  min-height: 38px;
+  max-height: 120px;
+  resize: vertical;
+  padding: 4px 6px;
+}
+.filter-multi option { padding: 4px 8px; }
+.filter-multi option:checked { background: rgba(99,102,241,0.25); color: #a5b4fc; }
+.filter-label { font-size: 0.76rem; color: #94a3b8; margin-bottom: 3px; display: block; white-space: nowrap; }
+.filter-search-input {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: #f1f5f9;
+  font-size: 0.78rem;
+  width: 100%;
+  outline: none;
+}
+.filter-search-input:focus { border-color: rgba(99,102,241,0.5); }
+@media (max-width: 900px) {
+  .filter-multi { max-height: 90px; font-size: 0.82rem; }
+  .filter-group { flex: 1 1 140px; }
+}
+@media (max-width: 480px) {
+  .filter-multi { max-height: 80px; }
+  .filter-group { flex: 1 1 100%; }
+}
+
 .filter-select:hover, .filter-select:focus {
   border-color: var(--accent-primary);
 }

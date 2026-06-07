@@ -203,8 +203,10 @@ function getRowMonthKey(r){
 // ===== DOM REFERENCES =====
 const loadingOverlay   = document.getElementById('loadingOverlay');
 const refreshBtn       = document.getElementById('refreshBtn');
-const filterMonth      = document.getElementById('filterMonth');
-const filterProduct    = document.getElementById('filterProduct');
+const filterMonth      = document.getElementById('filterMonth');   // <select multiple>
+const filterProduct    = document.getElementById('filterProduct');  // <select>
+const filterBranch     = ()=>document.getElementById('filterBranch'); // <select multiple>
+const filterGel        = ()=>document.getElementById('filterGel');    // <select multiple>
 const lastUpdateEl     = document.getElementById('lastUpdate');
 const tableSearchEl    = document.getElementById('tableSearch');
 const tableStatusEl    = document.getElementById('tableStatus');
@@ -226,7 +228,13 @@ sidebarToggleEl.addEventListener('click', () => {
 mobileMenuBtn.addEventListener('click', () => sidebarEl.classList.toggle('mobile-open'));
 
 // Filter listeners
-filterProduct.addEventListener('change', applyGlobalFilters);
+// Native select event listeners
+filterProduct.addEventListener('change',()=>{_populateBranchSelect();applyGlobalFilters();});
+filterMonth.addEventListener('change',applyGlobalFilters);
+document.addEventListener('change',e=>{
+  if(filterBranch()&&e.target===filterBranch())applyGlobalFilters();
+  if(filterGel()&&e.target===filterGel()){_syncGelToBranch();applyGlobalFilters();}
+});
 
 // ===== NAVIGATION =====
 const navItems = document.querySelectorAll('.nav-item');
@@ -259,25 +267,69 @@ function navigateTo(section, statusFilter) {
 
 // ===== FILTER POPULATE =====
 function populateFilters(){
-  // Product dropdown (unchanged)
+  // ── Produk ──────────────────────────────────────────────────────────
   const products=[...new Set(allData.map(r=>r['Product Source']).filter(Boolean))].sort();
   filterProduct.innerHTML='<option value="">Semua Produk</option>'+products.map(p=>`<option value="${p}">${p}</option>`).join('');
 
-  // Month checklist (year+month labels, sorted chronologically)
+  // ── Bulan ────────────────────────────────────────────────────────────
   const monthKeySet=new Set();
-  allData.forEach(r=>{ const k=getRowMonthKey(r); if(k) monthKeySet.add(k); });
+  allData.forEach(r=>{const k=getRowMonthKey(r);if(k)monthKeySet.add(k);});
   const allMonthKeys=[...monthKeySet].sort((a,b)=>{
-    const parse=s=>{const p=s.split(' ');const yr=p.length>1?parseInt(p[0]):9999;const mo=MONTH_ORDER.indexOf(p[p.length-1]);return yr*100+mo;};
-    return parse(a)-parse(b);
+    const p=s=>{const q=s.split(' ');return(q.length>1?+q[0]:9999)*100+MONTH_ORDER.indexOf(q[q.length-1]);};
+    return p(a)-p(b);
   });
-  _buildMonthChecklist(allMonthKeys);
+  filterMonth.innerHTML=allMonthKeys.map(k=>`<option value="${k}">${k}</option>`).join('');
+  Array.from(filterMonth.options).forEach(o=>o.selected=true); // default: semua dipilih
 
-  // Branch dropdown
-  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
-  _buildBranchChecklist(allBranches, '');
+  // ── Cabang ───────────────────────────────────────────────────────────
+  _populateBranchSelect();
 
-  // Gel filter (setelah master data tersedia)
-  _buildGelFilter();
+  // ── Gel ──────────────────────────────────────────────────────────────
+  _populateGelSelect();
+}
+
+// Populate branch native select
+function _populateBranchSelect(){
+  const sel=filterBranch();if(!sel)return;
+  const branches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
+  const prevSelected=Array.from(sel.options).filter(o=>o.selected).map(o=>o.value);
+  sel.innerHTML=branches.map(b=>`<option value="${b}">${b}</option>`).join('');
+  if(prevSelected.length&&prevSelected.length<branches.length){
+    Array.from(sel.options).forEach(o=>o.selected=prevSelected.includes(o.value));
+  } else {
+    Array.from(sel.options).forEach(o=>o.selected=true); // default: semua
+  }
+}
+
+// Populate gel native select
+function _populateGelSelect(){
+  const sel=filterGel();if(!sel)return;
+  const gels=[...new Set([...masterBranchMap.values()]
+    .filter(m=>m.hasSimfast&&m.gel!=='').map(m=>String(m.gel)))].sort((a,b)=>+a-+b);
+  sel.innerHTML=gels.length
+    ?gels.map(g=>`<option value="${g}">Gel ${g}</option>`).join('')
+    :'<option disabled value="">Master belum dimuat</option>';
+  Array.from(sel.options).forEach(o=>o.selected=true); // default: semua
+}
+
+// Branch search — hides options that don't match query
+function filterBranchOptions(val){
+  const sel=filterBranch();if(!sel)return;
+  const q=val.toLowerCase();
+  Array.from(sel.options).forEach(o=>{o.hidden=q?!o.value.toLowerCase().includes(q):false;});
+}
+
+// Gel → auto-select matching branches in filterBranch select
+function _syncGelToBranch(){
+  const gelSel=filterGel(),brSel=filterBranch();
+  if(!gelSel||!brSel)return;
+  const selGels=Array.from(gelSel.options).filter(o=>o.selected&&!o.hidden).map(o=>o.value);
+  const allSel=selGels.length===0||selGels.length===gelSel.options.length;
+  if(allSel){Array.from(brSel.options).forEach(o=>o.selected=true);return;}
+  const gelCanons=new Set([...masterBranchMap.values()]
+    .filter(m=>selGels.includes(String(m.gel))&&m.hasSimfast)
+    .map(m=>canonBranch(m.branch)));
+  Array.from(brSel.options).forEach(o=>o.selected=gelCanons.has(canonBranch(o.value)));
 }
 
 function _buildMonthChecklist(allMonthKeys){
@@ -455,43 +507,52 @@ function _applyGelFilter(){
 
 // ===== GLOBAL FILTERS =====
 function applyGlobalFilters(){
-  const selMonths=filterState.months; // [] = all
+  // ── Baca nilai dari native select elements ────────────────────────
+  const selMonths=Array.from(filterMonth.options).filter(o=>o.selected&&!o.hidden).map(o=>o.value);
+  const allMonthsSel=selMonths.length===Array.from(filterMonth.options).filter(o=>!o.hidden).length;
+
   const product=filterProduct.value;
-  const selBranches=filterState.branches; // [] = all
+
+  const brSel=filterBranch();
+  const selBranches=brSel?Array.from(brSel.options).filter(o=>o.selected&&!o.hidden).map(o=>o.value):[];
+  const allBranchesSel=!brSel||selBranches.length===Array.from(brSel.options).filter(o=>!o.hidden).length;
 
   filteredData=allData.filter(r=>{
-    if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
+    if(!allMonthsSel){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
     if(product&&r['Product Source']!==product)return false;
-    if(selBranches.length&&!selBranches.includes(branchField(r)))return false;
+    if(!allBranchesSel&&!selBranches.includes(branchField(r)))return false;
     return true;
   });
   filteredTagData=tagData.filter(r=>{
-    if(selMonths.length){
+    if(!allMonthsSel){
       const yr=getRowYear(r);
       const k=yr?`${yr} ${monthNumToName(r.Month_Number)}`:monthNumToName(r.Month_Number);
-      if(!selMonths.includes(k))return false;
+      const match=selMonths.includes(k)||selMonths.some(s=>s.split(' ').pop()===k.split(' ').pop());
+      if(!match)return false;
     }
     if(product&&r['Product Source']!==product)return false;
+    if(!allBranchesSel){
+      const tb=r['Branch Name']||r['Branch']||'';
+      if(!selBranches.some(b=>canonBranch(b)===canonBranch(tb)))return false;
+    }
     return true;
   });
   filteredDDData=ddData.filter(r=>{
-    if(selMonths.length){
-      const d=parseDDDate(r['Submit Date']);
-      if(!d)return false;
+    if(!allMonthsSel){
+      const d=parseDDDate(r['Submit Date']);if(!d)return false;
       const k=d.year?`${d.year} ${d.month}`:d.month;
-      if(!selMonths.includes(k))return false;
+      if(!selMonths.includes(k)&&!selMonths.some(s=>s.split(' ').pop()===d.month))return false;
     }
-    if(selBranches.length){
+    if(!allBranchesSel){
       const ddCanon=canonBranch(r['Branch Name']||'');
       if(!selBranches.some(b=>canonBranch(b)===ddCanon))return false;
     }
     return true;
   });
-  // SimFast filtered data (date-aware, always SimFast+Simascore)
   filteredSFData=allData.filter(r=>{
     if(!r._sfActive)return false;
-    if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
-    if(selBranches.length&&!selBranches.includes(branchField(r)))return false;
+    if(!allMonthsSel){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
+    if(!allBranchesSel&&!selBranches.includes(branchField(r)))return false;
     return true;
   });
   currentPage=1;
@@ -567,11 +628,8 @@ async function loadData(){
     document.querySelector('.ds-val').textContent=master.length>0?'4 Sheets ✓':'3 Sheets ✓ (Master: upload Master.csv ke GitHub)';
     populateFilters();
     // Default: SimFast dipilih saat pertama load
-    if(!filterProduct.value){
-      const sfOpt=Array.from(filterProduct.options).find(o=>o.value==='SimFast');
-      if(sfOpt) filterProduct.value='SimFast';
-    }
-    _rebuildBranchForProduct();
+    const sfOpt=Array.from(filterProduct.options).find(o=>o.value==='SimFast');
+    if(sfOpt&&!filterProduct.value)filterProduct.value='SimFast';
     applyGlobalFilters();
   }catch(err){
     showLoading(false);
