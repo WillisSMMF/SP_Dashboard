@@ -203,10 +203,8 @@ function getRowMonthKey(r){
 // ===== DOM REFERENCES =====
 const loadingOverlay   = document.getElementById('loadingOverlay');
 const refreshBtn       = document.getElementById('refreshBtn');
-const filterMonth      = document.getElementById('filterMonth');   // <select multiple>
-const filterProduct    = document.getElementById('filterProduct');  // <select>
-const filterBranch     = ()=>document.getElementById('filterBranch'); // <select multiple>
-const filterGel        = ()=>document.getElementById('filterGel');    // <select multiple>
+const filterMonth      = document.getElementById('filterMonth');
+const filterProduct    = document.getElementById('filterProduct');
 const lastUpdateEl     = document.getElementById('lastUpdate');
 const tableSearchEl    = document.getElementById('tableSearch');
 const tableStatusEl    = document.getElementById('tableStatus');
@@ -228,13 +226,7 @@ sidebarToggleEl.addEventListener('click', () => {
 mobileMenuBtn.addEventListener('click', () => sidebarEl.classList.toggle('mobile-open'));
 
 // Filter listeners
-// Native select event listeners
-filterProduct.addEventListener('change',()=>{_populateBranchSelect();applyGlobalFilters();});
-filterMonth.addEventListener('change',applyGlobalFilters);
-document.addEventListener('change',e=>{
-  if(filterBranch()&&e.target===filterBranch())applyGlobalFilters();
-  if(filterGel()&&e.target===filterGel()){_syncGelToBranch();applyGlobalFilters();}
-});
+filterProduct.addEventListener('change', applyGlobalFilters);
 
 // ===== NAVIGATION =====
 const navItems = document.querySelectorAll('.nav-item');
@@ -267,69 +259,25 @@ function navigateTo(section, statusFilter) {
 
 // ===== FILTER POPULATE =====
 function populateFilters(){
-  // ── Produk ──────────────────────────────────────────────────────────
+  // Product dropdown (unchanged)
   const products=[...new Set(allData.map(r=>r['Product Source']).filter(Boolean))].sort();
   filterProduct.innerHTML='<option value="">Semua Produk</option>'+products.map(p=>`<option value="${p}">${p}</option>`).join('');
 
-  // ── Bulan ────────────────────────────────────────────────────────────
+  // Month checklist (year+month labels, sorted chronologically)
   const monthKeySet=new Set();
-  allData.forEach(r=>{const k=getRowMonthKey(r);if(k)monthKeySet.add(k);});
+  allData.forEach(r=>{ const k=getRowMonthKey(r); if(k) monthKeySet.add(k); });
   const allMonthKeys=[...monthKeySet].sort((a,b)=>{
-    const p=s=>{const q=s.split(' ');return(q.length>1?+q[0]:9999)*100+MONTH_ORDER.indexOf(q[q.length-1]);};
-    return p(a)-p(b);
+    const parse=s=>{const p=s.split(' ');const yr=p.length>1?parseInt(p[0]):9999;const mo=MONTH_ORDER.indexOf(p[p.length-1]);return yr*100+mo;};
+    return parse(a)-parse(b);
   });
-  filterMonth.innerHTML=allMonthKeys.map(k=>`<option value="${k}">${k}</option>`).join('');
-  Array.from(filterMonth.options).forEach(o=>o.selected=true); // default: semua dipilih
+  _buildMonthChecklist(allMonthKeys);
 
-  // ── Cabang ───────────────────────────────────────────────────────────
-  _populateBranchSelect();
+  // Branch dropdown
+  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
+  _buildBranchChecklist(allBranches, '');
 
-  // ── Gel ──────────────────────────────────────────────────────────────
-  _populateGelSelect();
-}
-
-// Populate branch native select
-function _populateBranchSelect(){
-  const sel=filterBranch();if(!sel)return;
-  const branches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
-  const prevSelected=Array.from(sel.options).filter(o=>o.selected).map(o=>o.value);
-  sel.innerHTML=branches.map(b=>`<option value="${b}">${b}</option>`).join('');
-  if(prevSelected.length&&prevSelected.length<branches.length){
-    Array.from(sel.options).forEach(o=>o.selected=prevSelected.includes(o.value));
-  } else {
-    Array.from(sel.options).forEach(o=>o.selected=true); // default: semua
-  }
-}
-
-// Populate gel native select
-function _populateGelSelect(){
-  const sel=filterGel();if(!sel)return;
-  const gels=[...new Set([...masterBranchMap.values()]
-    .filter(m=>m.hasSimfast&&m.gel!=='').map(m=>String(m.gel)))].sort((a,b)=>+a-+b);
-  sel.innerHTML=gels.length
-    ?gels.map(g=>`<option value="${g}">Gel ${g}</option>`).join('')
-    :'<option disabled value="">Master belum dimuat</option>';
-  Array.from(sel.options).forEach(o=>o.selected=true); // default: semua
-}
-
-// Branch search — hides options that don't match query
-function filterBranchOptions(val){
-  const sel=filterBranch();if(!sel)return;
-  const q=val.toLowerCase();
-  Array.from(sel.options).forEach(o=>{o.hidden=q?!o.value.toLowerCase().includes(q):false;});
-}
-
-// Gel → auto-select matching branches in filterBranch select
-function _syncGelToBranch(){
-  const gelSel=filterGel(),brSel=filterBranch();
-  if(!gelSel||!brSel)return;
-  const selGels=Array.from(gelSel.options).filter(o=>o.selected&&!o.hidden).map(o=>o.value);
-  const allSel=selGels.length===0||selGels.length===gelSel.options.length;
-  if(allSel){Array.from(brSel.options).forEach(o=>o.selected=true);return;}
-  const gelCanons=new Set([...masterBranchMap.values()]
-    .filter(m=>selGels.includes(String(m.gel))&&m.hasSimfast)
-    .map(m=>canonBranch(m.branch)));
-  Array.from(brSel.options).forEach(o=>o.selected=gelCanons.has(canonBranch(o.value)));
+  // Gel filter (setelah master data tersedia)
+  _buildGelFilter();
 }
 
 function _buildMonthChecklist(allMonthKeys){
@@ -507,52 +455,43 @@ function _applyGelFilter(){
 
 // ===== GLOBAL FILTERS =====
 function applyGlobalFilters(){
-  // ── Baca nilai dari native select elements ────────────────────────
-  const selMonths=Array.from(filterMonth.options).filter(o=>o.selected&&!o.hidden).map(o=>o.value);
-  const allMonthsSel=selMonths.length===Array.from(filterMonth.options).filter(o=>!o.hidden).length;
-
+  const selMonths=filterState.months; // [] = all
   const product=filterProduct.value;
-
-  const brSel=filterBranch();
-  const selBranches=brSel?Array.from(brSel.options).filter(o=>o.selected&&!o.hidden).map(o=>o.value):[];
-  const allBranchesSel=!brSel||selBranches.length===Array.from(brSel.options).filter(o=>!o.hidden).length;
+  const selBranches=filterState.branches; // [] = all
 
   filteredData=allData.filter(r=>{
-    if(!allMonthsSel){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
+    if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
     if(product&&r['Product Source']!==product)return false;
-    if(!allBranchesSel&&!selBranches.includes(branchField(r)))return false;
+    if(selBranches.length&&!selBranches.includes(branchField(r)))return false;
     return true;
   });
   filteredTagData=tagData.filter(r=>{
-    if(!allMonthsSel){
+    if(selMonths.length){
       const yr=getRowYear(r);
       const k=yr?`${yr} ${monthNumToName(r.Month_Number)}`:monthNumToName(r.Month_Number);
-      const match=selMonths.includes(k)||selMonths.some(s=>s.split(' ').pop()===k.split(' ').pop());
-      if(!match)return false;
+      if(!selMonths.includes(k))return false;
     }
     if(product&&r['Product Source']!==product)return false;
-    if(!allBranchesSel){
-      const tb=r['Branch Name']||r['Branch']||'';
-      if(!selBranches.some(b=>canonBranch(b)===canonBranch(tb)))return false;
-    }
     return true;
   });
   filteredDDData=ddData.filter(r=>{
-    if(!allMonthsSel){
-      const d=parseDDDate(r['Submit Date']);if(!d)return false;
+    if(selMonths.length){
+      const d=parseDDDate(r['Submit Date']);
+      if(!d)return false;
       const k=d.year?`${d.year} ${d.month}`:d.month;
-      if(!selMonths.includes(k)&&!selMonths.some(s=>s.split(' ').pop()===d.month))return false;
+      if(!selMonths.includes(k))return false;
     }
-    if(!allBranchesSel){
+    if(selBranches.length){
       const ddCanon=canonBranch(r['Branch Name']||'');
       if(!selBranches.some(b=>canonBranch(b)===ddCanon))return false;
     }
     return true;
   });
+  // SimFast filtered data (date-aware, always SimFast+Simascore)
   filteredSFData=allData.filter(r=>{
     if(!r._sfActive)return false;
-    if(!allMonthsSel){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
-    if(!allBranchesSel&&!selBranches.includes(branchField(r)))return false;
+    if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
+    if(selBranches.length&&!selBranches.includes(branchField(r)))return false;
     return true;
   });
   currentPage=1;
@@ -628,8 +567,11 @@ async function loadData(){
     document.querySelector('.ds-val').textContent=master.length>0?'4 Sheets ✓':'3 Sheets ✓ (Master: upload Master.csv ke GitHub)';
     populateFilters();
     // Default: SimFast dipilih saat pertama load
-    const sfOpt=Array.from(filterProduct.options).find(o=>o.value==='SimFast');
-    if(sfOpt&&!filterProduct.value)filterProduct.value='SimFast';
+    if(!filterProduct.value){
+      const sfOpt=Array.from(filterProduct.options).find(o=>o.value==='SimFast');
+      if(sfOpt) filterProduct.value='SimFast';
+    }
+    _rebuildBranchForProduct();
     applyGlobalFilters();
   }catch(err){
     showLoading(false);
@@ -2479,119 +2421,50 @@ window._sfExportDetailXLS=function(){
   }catch(e){alert('Export gagal: '+e.message);}
 };
 
-// ===== DROPDOWN — TELEPORT APPROACH =====
-// Masalah: backdrop-filter pada topbar membuat position:fixed terurung di dalam topbar.
-// Solusi: saat mobile, PINDAHKAN panel ke document.body (teleport), bukan set fixed di tempat asalnya.
 function toggleDrop(id) {
   const panel = document.getElementById(id);
   if (!panel) return;
-
-  // Simpan inline-style asli sekali saja
-  if (panel.dataset.origStyle === undefined)
+  // Save original inline style once
+  if (panel.dataset.origStyle === undefined) {
     panel.dataset.origStyle = panel.getAttribute('style') || '';
-
+  }
   const isOpen = panel.classList.contains('open');
   _closeAllPanels();
   if (isOpen) return;
 
   if (window.innerWidth < 900) {
-    // ── MOBILE: teleport ke <body> ──────────────────────────────────────
-    // Simpan posisi asli di DOM
-    panel._origParent = panel.parentElement;
-    panel._origNext   = panel.nextSibling;
-    document.body.appendChild(panel);           // PINDAHKAN ke body — tidak ada stacking context
-
-    const maxH = Math.round(window.innerHeight * 0.72);
+    // Bottom sheet on mobile — always visible regardless of scroll/wrap
+    const maxH = Math.round(window.innerHeight * 0.65);
     panel.setAttribute('style',
       `position:fixed!important;bottom:0!important;left:0!important;right:0!important;` +
-      `width:100%!important;max-height:${maxH}px!important;overflow-y:hidden!important;` +
-      `z-index:999999!important;background:#1e293b!important;` +
-      `border-radius:20px 20px 0 0!important;` +
-      `border-top:1px solid rgba(255,255,255,0.12)!important;` +
-      `box-shadow:0 -8px 32px rgba(0,0,0,0.6)!important;`
+      `width:100%!important;max-height:${maxH}px!important;overflow-y:auto!important;` +
+      `z-index:999999!important;border-radius:16px 16px 0 0!important;` +
+      `padding-bottom:env(safe-area-inset-bottom,12px)!important;box-shadow:0 -4px 24px rgba(0,0,0,0.5)!important;`
     );
-
-    // Inner scroll: hapus batasan max-height agar panel-lah yang scroll
-    panel.querySelectorAll('.ov-dd-scroll').forEach(s => {
-      s._mobileMaxH = s.style.maxHeight;
-      s._mobileOvY  = s.style.overflowY;
-      s.style.maxHeight = `${maxH - 90}px`;
-      s.style.overflowY = 'auto';
-      s.style.webkitOverflowScrolling = 'touch';
-    });
-
-    // Header bar (drag handle + judul + tombol selesai)
-    if (!panel.querySelector('._ddHdr')) {
-      const hdr = document.createElement('div');
-      hdr.className = '_ddHdr';
-      hdr.style.cssText =
-        'position:sticky;top:0;background:#1e293b;z-index:2;padding:0 16px 10px;' +
-        'border-bottom:1px solid rgba(255,255,255,0.08);';
-      hdr.innerHTML =
-        '<div style="width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:10px auto 10px;"></div>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center">' +
-          '<span style="font-weight:700;color:#f1f5f9;font-size:0.9rem">Filter</span>' +
-          '<button onclick="_closeAllPanels()" style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 16px;border-radius:20px;cursor:pointer;font-size:0.82rem;font-weight:600;-webkit-tap-highlight-color:transparent">Selesai ✓</button>' +
-        '</div>';
-      panel.insertBefore(hdr, panel.firstChild);
-    }
-
-    // Backdrop gelap
+    // Show overlay backdrop
     let bg = document.getElementById('_ddBg');
     if (!bg) {
       bg = document.createElement('div');
       bg.id = '_ddBg';
+      bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999998;';
+      bg.onclick = _closeAllPanels;
       document.body.appendChild(bg);
     }
-    bg.style.cssText = 'position:fixed!important;inset:0!important;background:rgba(0,0,0,0.55)!important;z-index:999998!important;';
-    bg.onclick = _closeAllPanels;
-
-    // Cegah scroll body saat bottom sheet terbuka
-    document.body.style.overflow = 'hidden';
-
-  } else {
-    // ── DESKTOP: biarkan posisi absolute seperti biasa ─────────────────
-    panel.setAttribute('style', panel.dataset.origStyle);
+    bg.style.display = 'block';
   }
-
   panel.classList.add('open');
 }
 
-function _closeAllPanels() {
-  document.querySelectorAll('.ov-dd-panel.open').forEach(p => {
+// Close dropdowns on outside click/tap
+function _closeAllPanels(){
+  document.querySelectorAll('.ov-dd-panel.open').forEach(p=>{
     p.classList.remove('open');
-
-    // Hapus header mobile jika ada
-    const hdr = p.querySelector('._ddHdr');
-    if (hdr) hdr.remove();
-
-    // Restore inner scroll limits
-    p.querySelectorAll('.ov-dd-scroll').forEach(s => {
-      if (s._mobileMaxH !== undefined) { s.style.maxHeight = s._mobileMaxH; delete s._mobileMaxH; }
-      if (s._mobileOvY !== undefined)  { s.style.overflowY = s._mobileOvY;  delete s._mobileOvY; }
-    });
-
-    // Kembalikan ke posisi DOM asli (teleport balik)
-    if (p._origParent) {
-      p._origParent.insertBefore(p, p._origNext || null);
-      delete p._origParent;
-      delete p._origNext;
-    }
-
-    // Restore style asli
-    if (p.dataset.origStyle !== undefined) p.setAttribute('style', p.dataset.origStyle);
+    if(p.dataset.origStyle!==undefined)p.setAttribute('style',p.dataset.origStyle);
     else p.removeAttribute('style');
   });
-
-  // Sembunyikan backdrop
-  const bg = document.getElementById('_ddBg');
-  if (bg) bg.style.display = 'none';
-
-  // Pulihkan scroll body
-  document.body.style.overflow = '';
+  // Hide mobile backdrop
+  const bg=document.getElementById('_ddBg');if(bg)bg.style.display='none';
 }
-
-// Close dropdowns on outside click/tap
 document.addEventListener('click',e=>{
   if(!e.target.closest('.ov-dd-wrap')&&!e.target.closest('.ov-dd-panel'))_closeAllPanels();
 },true);
