@@ -9,7 +9,6 @@
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1712613541&single=true&output=csv';
 const TAG_CSV_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1035358319&single=true&output=csv';
 const MASTER_CSV_URL= 'https://willissmmf.github.io/SP_Dashboard/Master.csv';
-    const masterFetch=MASTER_CSV_URL.includes('MASTER_GID')?Promise.resolve([]):parseCSV(MASTER_CSV_URL,'Master').catch(()=>[]);
 
 const DD_CSV_URL    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=408991878&single=true&output=csv';
 
@@ -104,6 +103,7 @@ const PAGE_SIZE=20;
 let sortCol='Date Submitted', sortDir='desc';
 let tableFilter={search:'',status:'',rootCause:''};
 let tagTableSortField='total', tagTableSortDir='desc';
+let filterState = { months: [], branches: [], gel: [] };
 
 // ===== DOM REFERENCES =====
 const loadingOverlay   = document.getElementById('loadingOverlay');
@@ -241,7 +241,7 @@ function getExportData() {
 }
 
 // ===== DATA LOADING =====
-async // ===== MASTER SHEET =====
+// ===== MASTER SHEET =====
 let masterData=[];
 const masterBranchMap=new Map(); // canonBranch → {gel,implementDate,wilayah,hasSimfast}
 let filteredSFData=[];
@@ -272,7 +272,6 @@ async function loadData(){
   showLoading(true);
   refreshBtn.classList.add('spinning');
   try{
-    const masterFetch=MASTER_CSV_URL.includes('MASTER_GID')?Promise.resolve([]):parseCSV(MASTER_CSV_URL,'Master').catch(()=>[]);
     const [main,tags,dd,master]=await Promise.all([
       parseCSV(SHEET_CSV_URL,'Data_Source'),parseCSV(TAG_CSV_URL,'Helper_Tag'),
       parseCSV(DD_CSV_URL,'DD_SimFast'),masterFetch]);
@@ -2357,5 +2356,3 @@ function _ddStarHtml(stars,row){
 }
 
 
-// ===== INIT =====
-window.addEventListener('DOMContentLoaded', () => { loadData(); });
