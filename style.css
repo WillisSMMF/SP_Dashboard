@@ -337,6 +337,36 @@ body {
   outline: none;
 }
 
+/* ── Native multi-select for Bulan, Cabang, Gel ─────────────────────── */
+.filter-multi {
+  height: auto;
+  min-height: 38px;
+  max-height: 120px;
+  resize: vertical;
+  padding: 4px 6px;
+}
+.filter-multi option { padding: 4px 8px; }
+.filter-multi option:checked { background: rgba(99,102,241,0.25); color: #a5b4fc; }
+.filter-label { font-size: 0.76rem; color: #94a3b8; margin-bottom: 3px; display: block; white-space: nowrap; }
+.filter-search-input {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: #f1f5f9;
+  font-size: 0.78rem;
+  width: 100%;
+  outline: none;
+}
+.filter-search-input:focus { border-color: rgba(99,102,241,0.5); }
+@media (max-width: 900px) {
+  .filter-multi { max-height: 90px; font-size: 0.82rem; }
+  .filter-group { flex: 1 1 140px; }
+}
+@media (max-width: 480px) {
+  .filter-multi { max-height: 80px; }
+  .filter-group { flex: 1 1 100%; }
+}
 
 .filter-select:hover, .filter-select:focus {
   border-color: var(--accent-primary);
@@ -980,23 +1010,3 @@ html, body { overflow-x: clip; max-width: 100vw; }
 
 /* Stacked totals label */
 .branch-total-label { font-size: 10px; font-weight: 700; fill: #f1f5f9; }
-
-/* ── Mobile <dialog> bottom sheet ────────────────────────────────────── */
-#_mDlg {
-  position: fixed;
-  bottom: 0; left: 0; right: 0; top: auto;
-  margin: 0; padding: 0;
-  width: 100%; max-width: 100%;
-  max-height: 80dvh;
-  border: none;
-  border-radius: 20px 20px 0 0;
-  background: #1e293b;
-  overflow: hidden;
-  box-shadow: 0 -8px 32px rgba(0,0,0,0.6);
-}
-#_mDlg::backdrop { background: rgba(0,0,0,0.55); }
-#_mDlgBody { overflow-y: auto; max-height: calc(80dvh - 72px); padding: 4px 0 16px; -webkit-overflow-scrolling: touch; }
-#_mDlg .ov-cb-row { min-height: 46px; padding: 8px 18px; font-size: 0.9rem; gap: 12px; }
-#_mDlg .ov-cb-row input[type=checkbox],
-#_mDlg .ov-cb-row input[type=radio] { width: 22px; height: 22px; cursor: pointer; flex-shrink: 0; }
-.filter-label { font-size: 0.76rem; color: #94a3b8; margin-bottom: 2px; display: block; }
