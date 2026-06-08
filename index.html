@@ -100,31 +100,28 @@
         </div>
       </div>
       <div class="topbar-right">
-        <div class="filter-group">
-          <label for="filterMonth" class="filter-label">📅 Bulan</label>
-          <select id="filterMonth" class="filter-select filter-multi" multiple title="Tahan Ctrl/Cmd untuk pilih banyak">
-            <!-- filled by JS -->
-          </select>
+        <select id="filterMonth" style="display:none"></select>
+        <div class="filter-group" id="fgBulan">
+          <label class="filter-label">📅 Bulan</label>
+          <button class="ov-dd-btn filter-select" onclick="toggleDrop('filterMonthPanel')"><span id="filterMonthLabel">Semua Bulan</span> ▾</button>
+          <div class="ov-dd-panel" id="filterMonthPanel" style="width:220px;z-index:300"></div>
         </div>
-        <div class="filter-group">
-          <label for="filterProduct" class="filter-label">📦 Produk</label>
-          <select id="filterProduct" class="filter-select"><option value="">Semua Produk</option></select>
-        </div>
-        <div class="filter-group" style="flex:1.8">
-          <label for="filterBranch" class="filter-label">🏙️ Cabang</label>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            <input type="text" id="branchSearch" placeholder="🔍 Cari cabang..." oninput="filterBranchOptions(this.value)"
-              class="filter-search-input"/>
-            <select id="filterBranch" class="filter-select filter-multi" multiple title="Tahan Ctrl/Cmd untuk pilih banyak">
-              <!-- filled by JS -->
-            </select>
+        <div class="filter-group"><label for="filterProduct" class="filter-label">📦 Produk</label>
+          <select id="filterProduct" class="filter-select"><option value="">Semua Produk</option></select></div>
+        <div class="filter-group" id="fgCabang">
+          <label class="filter-label">🏙️ Cabang</label>
+          <button class="ov-dd-btn filter-select" onclick="toggleDrop('filterBranchPanel')"><span id="filterBranchLabel">Semua Cabang</span> ▾</button>
+          <div class="ov-dd-panel" id="filterBranchPanel" style="width:260px;z-index:300">
+            <div style="padding:8px 10px 4px"><input type="text" id="branchSearchInput" placeholder="🔍 Cari cabang..."
+              oninput="filterBranchDropdown(this.value)"
+              style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:6px 9px;color:#f1f5f9;font-size:0.8rem;outline:none"/></div>
+            <div class="ov-dd-scroll" id="filterBranchList" style="max-height:260px"></div>
           </div>
         </div>
-        <div class="filter-group">
-          <label for="filterGel" class="filter-label">🌊 Gel.</label>
-          <select id="filterGel" class="filter-select filter-multi" multiple title="Pilih gelombang — otomatis filter Cabang">
-            <!-- filled by JS -->
-          </select>
+        <div class="filter-group" id="fgGel">
+          <label class="filter-label">🌊 Gel.</label>
+          <button class="ov-dd-btn filter-select" onclick="toggleDrop('filterGelPanel')"><span id="filterGelLabel">Semua Gel</span> ▾</button>
+          <div class="ov-dd-panel" id="filterGelPanel" style="width:190px;z-index:300"></div>
         </div>
         <div class="export-group">
           <span class="export-label">Export:</span>
