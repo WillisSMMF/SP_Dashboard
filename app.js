@@ -8,10 +8,10 @@
 // ===== DATA SOURCE URLS =====
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1712613541&single=true&output=csv';
 const TAG_CSV_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1035358319&single=true&output=csv';
-const DD_CSV_URL    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=408991878&single=true&output=csv';
-// Master sheet — diisi dari Master.csv yang di-upload ke GitHub Pages
-// ATAU ganti dengan URL publish Google Sheets jika sudah dipublish
 const MASTER_CSV_URL= 'https://willissmmf.github.io/SP_Dashboard/Master.csv';
+    const masterFetch=MASTER_CSV_URL.includes('MASTER_GID')?Promise.resolve([]):parseCSV(MASTER_CSV_URL,'Master').catch(()=>[]);
+
+const DD_CSV_URL    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=408991878&single=true&output=csv';
 
 const CORS_PROXIES = [
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
@@ -32,99 +32,9 @@ const MONTH_ORDER = ['January','February','March','April','May','June','July','A
 const monthNumToName = n => MONTH_ORDER[parseInt(n) - 1] || '';
 const normBranch = s => (s || '').trim().toUpperCase();
 
-// ===== MASTER SHEET =====
-let masterData=[];
-const masterBranchMap=new Map(); // canonBranch → {gel,implementDate,wilayah,hasSimfast}
-let filteredSFData=[];
-
-const ID_MONTHS_MAP={'januari':0,'februari':1,'maret':2,'april':3,'mei':4,'juni':5,'juli':6,'agustus':7,'september':8,'oktober':9,'november':10,'desember':11,'january':0,'february':1,'march':2,'may':4,'june':5,'july':6,'august':7,'october':9,'december':11,'april':3,'september':8,'november':10};
-
-function parseMasterDate(s){
-  if(!s||!String(s).trim())return null;
-  s=String(s).trim();
-  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
-  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if(m)return new Date(+m[3],+m[2]-1,+m[1]);
-  const parts=s.split(/[\s,]+/);
-  if(parts.length>=3){const d=parseInt(parts[0]),mon=ID_MONTHS_MAP[parts[1].toLowerCase()],y=parseInt(parts[2]);if(!isNaN(d)&&mon!==undefined&&!isNaN(y))return new Date(y,mon,d);}
-  const d=new Date(s);return isNaN(d.getTime())?null:d;
-}
-
-function parseIssueDate(s){
-  if(!s)return null;
-  if(s instanceof Date)return s;
-  let m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
-  m=String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if(m)return new Date(+m[3],+m[1]-1,+m[2]);
-  const d=new Date(s);return isNaN(d.getTime())?null:d;
-}
-
-function processMasterData(rows){
-  masterBranchMap.clear();
-  rows.forEach(r=>{
-    const cab=(r['Cabang']||r['cabang']||'').trim();
-    const gel=(r['Gel_SimFast']||r['Gel']||'').toString().trim();
-    const impl=parseMasterDate(r['Implement']||r['implement']||'');
-    const wil=(r['Wilayah']||r['wilayah']||'').trim();
-    const hasSimfast=(r['Has_SimFast']||r['has_simfast']||'0')!=='0';
-    if(!cab)return;
-    masterBranchMap.set(canonBranch(cab),{branch:cab,gel,implementDate:impl,wilayah:wil,hasSimfast:hasSimfast&&impl!==null});
-  });
-}
-
-function isSimfastBranch(branchName){
-  const info=masterBranchMap.get(canonBranch(branchName));
-  return !!(info&&info.hasSimfast);
-}
-
-function getMasterInfo(branchName){
-  return masterBranchMap.get(canonBranch(branchName))||null;
-}
-
-function preprocessSimfastData(){
-  const masterLoaded=masterBranchMap.size>0;
-  allData.forEach(r=>{
-    const prod=r['Product Source']||'';
-    if(prod!=='SimFast'&&prod!=='Simascore'){r._sfActive=false;return;}
-    if(!masterLoaded){
-      // Fallback: tampilkan semua SimFast/Simascore tanpa filter implement date
-      r._sfActive=true; r._sfGel='?'; r._sfWilayah='';
-      return;
-    }
-    const issueDate=parseIssueDate(r['Date Submitted']);
-    if(!issueDate){r._sfActive=false;return;}
-    const info=getMasterInfo(branchField(r));
-    if(!info||!info.implementDate){
-      // Branch ada di data tapi tidak ada di master → tampilkan saja
-      r._sfActive=true; r._sfGel='?'; r._sfWilayah='';
-      return;
-    }
-    r._sfActive=issueDate>=info.implementDate;
-    r._sfGel=info.gel;
-    r._sfWilayah=info.wilayah;
-  });
-}
-
-function _rebuildBranchForProduct(){
-  // Always show ALL branches — Gel filter handles SimFast-specific filtering
-  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
-  filterState.branches=[];
-  _buildBranchChecklist(allBranches,'');
-}
-
 // FIX #6: Fuzzy branch matching — strip common suffixes for matching
-function matchBranches(branchA, branchB) {
-  const clean = s => normBranch(s)
-    .replace(/\bCAB\.?\s*/,'').replace(/\bKC\.?\s*/,'').replace(/\bKCP\.?\s*/,'')
-    .replace(/\bSYARIAH\b/,'').replace(/\s+/g,' ').trim();
-  if (normBranch(branchA) === normBranch(branchB)) return true;
-  return clean(branchA) === clean(branchB);
-}
 
 // canonBranch: normalisasi nama cabang untuk matching konsisten lintas sheet
-// Kudus / CAB KUDUS / KCP KUDUS / MUF-Cab Kudus → semua jadi "KUDUS"
 function canonBranch(name){
   return (name||'').toUpperCase()
     .replace(/^MUF[-\s]+/,'')
@@ -135,6 +45,14 @@ function canonBranch(name){
     .replace(/[-_]+/g,' ')
     .replace(/\s+/g,' ')
     .trim();
+}
+
+function matchBranches(branchA, branchB) {
+  const clean = s => normBranch(s)
+    .replace(/\bCAB\.?\s*/,'').replace(/\bKC\.?\s*/,'').replace(/\bKCP\.?\s*/,'')
+    .replace(/\bSYARIAH\b/,'').replace(/\s+/g,' ').trim();
+  if (normBranch(branchA) === normBranch(branchB)) return true;
+  return clean(branchA) === clean(branchB);
 }
 
 // Parse "17 October, 2025, 1:47" → { month, year, sortKey, label }
@@ -156,13 +74,12 @@ Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
 Chart.defaults.font.family = 'Inter, sans-serif';
 Chart.defaults.plugins.legend.labels.usePointStyle = true;
 Chart.defaults.plugins.legend.labels.pointStyleWidth = 8;
-Chart.defaults.plugins.tooltip.backgroundColor = '#1e293b';
-Chart.defaults.plugins.tooltip.borderColor = 'rgba(255,255,255,0.15)';
+Chart.defaults.plugins.tooltip.backgroundColor = '#1a2235';
+Chart.defaults.plugins.tooltip.borderColor = 'rgba(255,255,255,0.1)';
 Chart.defaults.plugins.tooltip.borderWidth = 1;
 Chart.defaults.plugins.tooltip.padding = 10;
 Chart.defaults.plugins.tooltip.titleColor = '#f1f5f9';
 Chart.defaults.plugins.tooltip.bodyColor = '#94a3b8';
-
 Chart.defaults.plugins.tooltip.cornerRadius = 8;
 
 const PALETTE = {
@@ -187,26 +104,12 @@ const PAGE_SIZE=20;
 let sortCol='Date Submitted', sortDir='desc';
 let tableFilter={search:'',status:'',rootCause:''};
 let tagTableSortField='total', tagTableSortDir='desc';
-// Global filter state (multi-month, branch)
-const filterState={ months:[], branches:[] };
-
-// ===== HELPERS (early, needed by filters) =====
-function getRowYear(r){
-  const ds=r['Date Submitted']||r['date_submitted']||'';
-  const m=ds.match(/\b(20\d{2})\b/); return m?m[1]:'';
-}
-function getRowMonthKey(r){
-  // Key used for filtering & grouping: "2025 January" or just "January"
-  const yr=getRowYear(r); return yr?`${yr} ${r.Month}`:r.Month||'';
-}
 
 // ===== DOM REFERENCES =====
 const loadingOverlay   = document.getElementById('loadingOverlay');
 const refreshBtn       = document.getElementById('refreshBtn');
-const filterMonth      = document.getElementById('filterMonth');   // <select multiple>
-const filterProduct    = document.getElementById('filterProduct');  // <select>
-const filterBranch     = ()=>document.getElementById('filterBranch'); // <select multiple>
-const filterGel        = ()=>document.getElementById('filterGel');    // <select multiple>
+const filterMonth      = document.getElementById('filterMonth');
+const filterProduct    = document.getElementById('filterProduct');
 const lastUpdateEl     = document.getElementById('lastUpdate');
 const tableSearchEl    = document.getElementById('tableSearch');
 const tableStatusEl    = document.getElementById('tableStatus');
@@ -227,9 +130,6 @@ sidebarToggleEl.addEventListener('click', () => {
 });
 mobileMenuBtn.addEventListener('click', () => sidebarEl.classList.toggle('mobile-open'));
 
-// Filter listeners
-filterProduct.addEventListener('change',applyGlobalFilters);
-
 // ===== NAVIGATION =====
 const navItems = document.querySelectorAll('.nav-item');
 navItems.forEach(item => {
@@ -240,8 +140,8 @@ navItems.forEach(item => {
   });
 });
 
-const SECTION_ICONS = { overview:'📊', simfast:'🚀', tickets:'🎫', sla:'⏱️', branch:'🗺️', tags:'🏷️', drawdown:'💰', map:'🌍' };
-const SECTION_TITLES = { overview:'Overview', simfast:'Overview SimFast', tickets:'Daftar Tiket', sla:'Analisis SLA', branch:'Analisis Cabang', tags:'Analisis Tag', drawdown:'Analisis Drawdown', map:'Peta Cabang (Experiment)' };
+const SECTION_ICONS = { overview:'📊', tickets:'🎫', sla:'⏱️', branch:'🗺️', tags:'🏷️', drawdown:'💰', map:'🌍' };
+const SECTION_TITLES = { overview:'Overview', tickets:'Daftar Tiket', sla:'Analisis SLA', branch:'Analisis Cabang', tags:'Analisis Tag', drawdown:'Analisis Drawdown', map:'Peta Cabang (Experiment)' };
 
 function navigateTo(section, statusFilter) {
   navItems.forEach(n => n.classList.remove('active'));
@@ -273,224 +173,6 @@ function populateFilters(){
   const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
   _buildBranchChecklist(allBranches,'');
   _buildGelFilter();
-}
-
-
-// Populate branch native select
-function _populateBranchSelect(){
-  const sel=filterBranch();if(!sel)return;
-  const branches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
-  const prevSelected=Array.from(sel.options).filter(o=>o.selected).map(o=>o.value);
-  sel.innerHTML=branches.map(b=>`<option value="${b}">${b}</option>`).join('');
-  if(prevSelected.length&&prevSelected.length<branches.length){
-    Array.from(sel.options).forEach(o=>o.selected=prevSelected.includes(o.value));
-  } else {
-    Array.from(sel.options).forEach(o=>o.selected=true); // default: semua
-  }
-}
-
-// Populate gel native select
-function _populateGelSelect(){
-  const sel=filterGel();if(!sel)return;
-  const gels=[...new Set([...masterBranchMap.values()]
-    .filter(m=>m.hasSimfast&&m.gel!=='').map(m=>String(m.gel)))].sort((a,b)=>+a-+b);
-  sel.innerHTML=gels.length
-    ?gels.map(g=>`<option value="${g}">Gel ${g}</option>`).join('')
-    :'<option disabled value="">Master belum dimuat</option>';
-  Array.from(sel.options).forEach(o=>o.selected=true); // default: semua
-}
-
-// Branch search — hides options that don't match query
-function filterBranchOptions(val){
-  const sel=filterBranch();if(!sel)return;
-  const q=val.toLowerCase();
-  Array.from(sel.options).forEach(o=>{o.hidden=q?!o.value.toLowerCase().includes(q):false;});
-}
-
-// Gel → auto-select matching branches in filterBranch select
-function _syncGelToBranch(){
-  const gelSel=filterGel(),brSel=filterBranch();
-  if(!gelSel||!brSel)return;
-  const selGels=Array.from(gelSel.options).filter(o=>o.selected&&!o.hidden).map(o=>o.value);
-  const allSel=selGels.length===0||selGels.length===gelSel.options.length;
-  if(allSel){Array.from(brSel.options).forEach(o=>o.selected=true);return;}
-  const gelCanons=new Set([...masterBranchMap.values()]
-    .filter(m=>selGels.includes(String(m.gel))&&m.hasSimfast)
-    .map(m=>canonBranch(m.branch)));
-  Array.from(brSel.options).forEach(o=>o.selected=gelCanons.has(canonBranch(o.value)));
-}
-
-function _buildMonthChecklist(allMonthKeys){
-  const panel=document.getElementById('filterMonthPanel'); if(!panel)return;
-  panel.innerHTML=`<div class="ov-dd-scroll" style="max-height:300px">
-    <label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px;padding-bottom:6px">
-      <input type="checkbox" id="fmAllCb" checked> <span style="font-weight:700">Semua Bulan</span>
-    </label>`+
-    allMonthKeys.map(k=>`<label class="ov-cb-row">
-      <input type="checkbox" class="fmCb" value="${k}" checked>
-      <span>${k}</span>
-    </label>`).join('')+`</div>`;
-
-  document.getElementById('fmAllCb').onchange=function(){
-    if(this.checked){
-      // Klik "Semua Bulan" ON → pilih semua, clear filter
-      filterState.months=[];
-      document.querySelectorAll('.fmCb').forEach(cb=>cb.checked=true);
-    } else {
-      // Klik "Semua Bulan" OFF → uncheck semua individual
-      filterState.months=[];
-      document.querySelectorAll('.fmCb').forEach(cb=>cb.checked=false);
-    }
-    _updateMonthLabel(allMonthKeys); applyGlobalFilters();
-  };
-  document.querySelectorAll('.fmCb').forEach(cb=>{
-    cb.onchange=()=>{
-      const checked=Array.from(document.querySelectorAll('.fmCb:checked')).map(x=>x.value);
-      if(checked.length===0){
-        // Tidak ada yg dipilih → reset ke semua
-        filterState.months=[];
-        document.querySelectorAll('.fmCb').forEach(c=>c.checked=true);
-        const allCb=document.getElementById('fmAllCb'); if(allCb)allCb.checked=true;
-      } else {
-        // Ada yg dipilih — simpan, JANGAN auto-check "Semua Bulan"
-        filterState.months=checked.length===allMonthKeys.length?[]:checked;
-        // "Semua Bulan" checkbox: tidak diubah otomatis
-      }
-      _updateMonthLabel(allMonthKeys); applyGlobalFilters();
-    };
-  });
-  _updateMonthLabel(allMonthKeys);
-}
-
-function _updateMonthLabel(allMonthKeys){
-  const lbl=document.getElementById('filterMonthLabel'); if(!lbl)return;
-  const n=filterState.months.length;
-  lbl.textContent=n===0||n===allMonthKeys.length?'Semua Bulan':n===1?filterState.months[0]:`${n} Bulan Dipilih`;
-}
-
-function _buildBranchChecklist(allBranches, search){
-  const list=document.getElementById('filterBranchList'); if(!list)return;
-  const filtered=search?allBranches.filter(b=>b.toLowerCase().includes(search.toLowerCase())):allBranches;
-  const selAll=filterState.branches.length===0;
-  list.innerHTML=`<label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:4px">
-      <input type="checkbox" id="fbAllCb" ${selAll?'checked':''}> <span style="font-weight:600">Semua Cabang</span>
-    </label>`+
-    filtered.map(b=>`<label class="ov-cb-row">
-      <input type="checkbox" class="fbCb" value="${b}" ${filterState.branches.length===0||filterState.branches.includes(b)?'checked':''}>
-      <span style="font-size:0.78rem">${b.length>36?b.slice(0,34)+'…':b}</span>
-    </label>`).join('');
-  document.getElementById('fbAllCb').onchange=function(){
-    filterState.branches=[];
-    document.querySelectorAll('.fbCb').forEach(cb=>cb.checked=this.checked);
-    _updateBranchLabel(); applyGlobalFilters();
-  };
-  document.querySelectorAll('.fbCb').forEach(cb=>{
-    cb.onchange=()=>{
-      filterState.branches=Array.from(document.querySelectorAll('.fbCb:checked')).map(x=>x.value);
-      const allCb=document.getElementById('fbAllCb');
-      if(allCb) allCb.checked=filterState.branches.length===allBranches.length;
-      _updateBranchLabel(); applyGlobalFilters();
-    };
-  });
-  _updateBranchLabel();
-}
-
-function _updateBranchLabel(){
-  const lbl=document.getElementById('filterBranchLabel'); if(!lbl)return;
-  const n=filterState.branches.length;
-  lbl.textContent=n===0?'Semua Cabang':n===1?filterState.branches[0].split(' ').slice(-1)[0]:`${n} Cabang`;
-}
-
-// Exposed globally for branch search input
-function filterBranchDropdown(val){
-  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
-  _buildBranchChecklist(allBranches, val);
-}
-
-// ── GEL FILTER ────────────────────────────────────────────────────────
-let filterState_gels = []; // [] = semua gel
-
-function _buildGelFilter(){
-  const panel=document.getElementById('filterGelPanel');if(!panel)return;
-  const gels=[...new Set([...masterBranchMap.values()]
-    .filter(m=>m.hasSimfast&&m.gel!=='').map(m=>String(m.gel)))]
-    .sort((a,b)=>+a-+b);
-
-  if(!gels.length){
-    panel.innerHTML='<div style="padding:10px 12px;color:#64748b;font-size:0.78rem">Master belum dimuat</div>';
-    return;
-  }
-
-  panel.innerHTML=`<div class="ov-dd-scroll" style="max-height:280px">
-    <div style="padding:8px 12px 4px;font-size:0.72rem;color:#64748b;font-weight:600;letter-spacing:0.04em">PILIH GELOMBANG</div>
-    <label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px">
-      <input type="checkbox" id="gelAllCb" ${filterState_gels.length===0?'checked':''}><span style="font-weight:600">Semua Gel</span>
-    </label>
-    ${gels.map(g=>`<label class="ov-cb-row">
-      <input type="checkbox" class="gelCb" value="${g}" ${filterState_gels.includes(g)?'checked':''}>
-      <span>Gel ${g}</span>
-    </label>`).join('')}
-  </div>`;
-
-  // ALL checkbox
-  document.getElementById('gelAllCb').onchange=function(){
-    if(this.checked){
-      filterState_gels=[];
-      document.querySelectorAll('.gelCb').forEach(cb=>cb.checked=true);
-    } else {
-      filterState_gels=[];
-      document.querySelectorAll('.gelCb').forEach(cb=>cb.checked=false);
-    }
-    _applyGelFilter();
-  };
-
-  // Individual gel checkboxes
-  document.querySelectorAll('.gelCb').forEach(cb=>{
-    cb.onchange=()=>{
-      const checked=Array.from(document.querySelectorAll('.gelCb:checked')).map(x=>x.value);
-      filterState_gels=checked.length===gels.length?[]:checked;
-      const allCb=document.getElementById('gelAllCb');
-      if(allCb)allCb.checked=filterState_gels.length===0;
-      _applyGelFilter();
-    };
-  });
-
-  _updateGelLabel();
-}
-
-function _updateGelLabel(){
-  const lbl=document.getElementById('filterGelLabel');if(!lbl)return;
-  lbl.textContent=filterState_gels.length===0?'Semua Gel':
-    filterState_gels.length===1?`Gel ${filterState_gels[0]}`:
-    `${filterState_gels.length} Gel`;
-}
-
-function _applyGelFilter(){
-  _updateGelLabel();
-  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
-  if(filterState_gels.length===0){
-    // Reset branch filter
-    filterState.branches=[];
-    _buildBranchChecklist(allBranches,'');
-  } else {
-    // Gabungkan cabang dari semua gel yang dipilih
-    const gelBranchCanons=new Set(
-      [...masterBranchMap.values()]
-        .filter(m=>filterState_gels.includes(String(m.gel))&&m.hasSimfast)
-        .map(m=>canonBranch(m.branch))
-    );
-    const matched=allBranches.filter(b=>gelBranchCanons.has(canonBranch(b)));
-    filterState.branches=matched;
-    _buildBranchChecklist(allBranches,'');
-    // Sync checkboxes
-    document.querySelectorAll('.fbCb').forEach(cb=>{
-      cb.checked=filterState.branches.includes(cb.value);
-    });
-    const allCb=document.getElementById('fbAllCb');
-    if(allCb)allCb.checked=false;
-    _updateBranchLabel();
-  }
-  applyGlobalFilters();
 }
 
 // ===== GLOBAL FILTERS =====
@@ -528,29 +210,923 @@ function applyGlobalFilters(){
   currentPage=1;
   renderAll();
 }
+filterProduct.addEventListener('change',applyGlobalFilters);
 
+// ===== HELPERS =====
+function countBy(arr,key){
+  const map={};
+  arr.forEach(r=>{const v=r[key]||'Unknown';map[v]=(map[v]||0)+1;});
+  return map;
+}
+function topN(obj,n){return Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,n);}
+function destroyChart(key){if(charts[key]){charts[key].destroy();delete charts[key];}}
+function avg(arr){return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;}
+const branchField = r => r['Branch Name']||r['Branch']||'';
 
-// ===== PAGER HELPER =====
-const DD_PAGE=20;
-let _ddVsIssuePage=1, _ddTablePage=1, _ddBestPage=1;
-let _ddVsIssueBranchDD={}, _ddTableBranchDD={}, _ddBestBranchDD={};
+// FIX #2: Get current filtered data snapshot for export (respects all active filters)
+function getExportData() {
+  // This always uses the currently-filtered data, consistent with what's on screen
+  let data=[...filteredData];
+  if(tableFilter.search) data=data.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(tableFilter.search)));
+  if(tableFilter.status==='__open__') data=data.filter(r=>!['resolved','closed'].includes((r.Status||'').toLowerCase()));
+  else if(tableFilter.status) data=data.filter(r=>(r.Status||'').toLowerCase()===tableFilter.status.toLowerCase());
+  if(tableFilter.rootCause) data=data.filter(r=>r['Root Cause']===tableFilter.rootCause);
+  return data.map(r=>({
+    'ID':r.Id||'','Date Submitted':(r['Date Submitted']||'').split(' ')[0]||'',
+    'Summary':r.Summary||'','Category':r.Category||'',
+    'Product Source':r['Product Source']||'','Status':r.Status||'',
+    'Root Cause':r['Root Cause']||'','Assigned To':r['Assigned To']||'',
+    'Branch':r['Branch Name']||r.Branch||'','Month':r.Month||'','SLA (hari)':r.SLA||'',
+  }));
+}
 
-function _renderPager(elId,cur,total,onGo){
-  const el=document.getElementById(elId); if(!el)return;
-  if(total<=1){el.innerHTML='';return;}
-  let pagesHtml='';
-  for(let p=1;p<=total;p++){
-    pagesHtml+=`<button data-p="${p}" style="background:${p===cur?PALETTE.primary:'rgba(255,255,255,0.07)'};border:none;color:#f1f5f9;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:0.78rem;font-weight:${p===cur?700:400}">${p}</button>`;
+// ===== DATA LOADING =====
+async // ===== MASTER SHEET =====
+let masterData=[];
+const masterBranchMap=new Map(); // canonBranch → {gel,implementDate,wilayah,hasSimfast}
+let filteredSFData=[];
+
+const ID_MONTHS_MAP={'januari':0,'februari':1,'maret':2,'april':3,'mei':4,'juni':5,'juli':6,'agustus':7,'september':8,'oktober':9,'november':10,'desember':11,'january':0,'february':1,'march':2,'may':4,'june':5,'july':6,'august':7,'october':9,'december':11,'april':3,'september':8,'november':10};
+
+async function parseCSV(url,name){
+  const isLocal=location.protocol==='file:';
+  const urlsToTry=isLocal?CORS_PROXIES.map(fn=>fn(url)):[url,...CORS_PROXIES.map(fn=>fn(url))];
+  for(let i=0;i<urlsToTry.length;i++){
+    try{
+      const result=await new Promise((resolve,reject)=>{
+        Papa.parse(urlsToTry[i],{download:true,header:true,skipEmptyLines:true,
+          complete(r){
+            const rows=r.data.filter(row=>Object.values(row).some(v=>v&&String(v).trim()!==''));
+            if(rows.length===0){reject(new Error('Empty'));return;}
+            resolve(rows);
+          },error:reject});
+      });
+      console.log(`✅ ${name} loaded via URL ${i+1}: ${result.length} rows`);
+      return result;
+    }catch(e){console.warn(`⚠️ ${name} URL ${i+1} failed:`,e.message);}
   }
-  el.innerHTML=`<div style="display:flex;gap:5px;align-items:center;justify-content:center;padding:8px 0;flex-wrap:wrap">
-    <button data-dir="prev" style="background:rgba(255,255,255,0.07);border:none;color:${cur>1?'#f1f5f9':'#475569'};padding:4px 10px;border-radius:5px;cursor:${cur>1?'pointer':'default'};font-size:0.78rem">‹</button>
-    ${pagesHtml}
-    <button data-dir="next" style="background:rgba(255,255,255,0.07);border:none;color:${cur<total?'#f1f5f9':'#475569'};padding:4px 10px;border-radius:5px;cursor:${cur<total?'pointer':'default'};font-size:0.78rem">›</button>
-    <span style="color:#64748b;font-size:0.75rem">hal ${cur}/${total}</span>
+  throw new Error(`Gagal memuat ${name} dari semua URL`);
+}
+
+async function loadData(){
+  showLoading(true);
+  refreshBtn.classList.add('spinning');
+  try{
+    const masterFetch=MASTER_CSV_URL.includes('MASTER_GID')?Promise.resolve([]):parseCSV(MASTER_CSV_URL,'Master').catch(()=>[]);
+    const [main,tags,dd,master]=await Promise.all([
+      parseCSV(SHEET_CSV_URL,'Data_Source'),parseCSV(TAG_CSV_URL,'Helper_Tag'),
+      parseCSV(DD_CSV_URL,'DD_SimFast'),masterFetch]);
+    allData=main.filter(r=>r.Id&&r.Id.trim()!=='');
+    tagData=tags.filter(r=>r.Id);
+    ddData=dd.filter(r=>(r['Branch Name']||r.Status)&&!isExcludedBranch(r['Branch Name']));
+    masterData=master;
+    processMasterData(master);
+    preprocessSimfastData();
+    showLoading(false);
+    refreshBtn.classList.remove('spinning');
+    lastUpdateEl.textContent='Update: '+new Date().toLocaleTimeString('id-ID');
+    document.querySelector('.ds-val').textContent=master.length>0?'4 Sheets ✓':'3 Sheets ✓';
+    populateFilters();
+    const sfOpt=Array.from(filterProduct.options).find(o=>o.value==='SimFast');
+    if(sfOpt&&!filterProduct.value)filterProduct.value='SimFast';
+    applyGlobalFilters();
+  }catch(err){
+    showLoading(false);
+    refreshBtn.classList.remove('spinning');
+    loadingOverlay.classList.remove('hidden');
+    loadingOverlay.innerHTML=`<div style="text-align:center;padding:32px;max-width:480px">
+      <div style="font-size:2.5rem;margin-bottom:16px">⚠️</div>
+      <h3 style="color:#f43f5e;margin-bottom:8px">Gagal Memuat Data</h3>
+      <p style="color:#94a3b8;font-size:0.875rem;margin-bottom:20px">${err.message}<br><br>
+        <strong style="color:#f1f5f9">Solusi:</strong> Upload ke <a href="https://app.netlify.com/drop" target="_blank" style="color:#6366f1">Netlify Drop</a> atau GitHub Pages.
+      </p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button onclick="loadData()" style="padding:9px 20px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600">↻ Coba Lagi</button>
+        <a href="https://app.netlify.com/drop" target="_blank" style="padding:9px 20px;background:#10b981;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;text-decoration:none">🚀 Netlify Drop</a>
+      </div></div>`;
+  }
+}
+
+function showLoading(show){
+  if(show){loadingOverlay.classList.remove('hidden');loadingOverlay.innerHTML=`<div class="loading-spinner"></div><p class="loading-text">Memuat 3 sheet dari Google Sheets...</p>`;}
+  else{loadingOverlay.classList.add('hidden');}
+}
+refreshBtn.addEventListener('click',loadData);
+
+// ===== RENDER ALL =====
+function renderAll(){
+  renderOverview();
+  renderTicketTable();
+  renderSLA();
+  renderBranch();
+  renderTagSection();
+  renderDrawdownSection();
+  renderOverviewSimfast();
+  // Map only renders on demand when tab is active
+}
+
+// ===== OVERVIEW =====
+function renderOverview(){
+  const total=filteredData.length;
+  const resolved=filteredData.filter(r=>r.Status==='resolved').length;
+  const open=filteredData.filter(r=>['assigned','acknowledged','feedback'].includes(r.Status)).length;
+  const slaVals=filteredData.map(r=>parseFloat(r.SLA)).filter(v=>!isNaN(v));
+  const avgSla=slaVals.length?(slaVals.reduce((a,b)=>a+b,0)/slaVals.length).toFixed(1):'-';
+  document.getElementById('kpiTotal').textContent=total.toLocaleString();
+  document.getElementById('kpiResolved').textContent=resolved.toLocaleString();
+  document.getElementById('kpiOpen').textContent=open.toLocaleString();
+  document.getElementById('kpiSla').textContent=avgSla;
+  document.getElementById('kpiResolvedPct').textContent=total?`${((resolved/total)*100).toFixed(1)}%`:'';
+  document.getElementById('kpiOpenPct').textContent=total?`${((open/total)*100).toFixed(1)}%`:'';
+  document.getElementById('kpiSlaLabel').textContent=avgSla<1?'✅ Baik':avgSla<3?'⚠️ Perlu Perhatian':'🚨 Kritis';
+  document.getElementById('kpi-total').onclick=()=>{tableFilter.status='';navigateTo('tickets','');};
+  document.getElementById('kpi-resolved').onclick=()=>{tableFilter.status='resolved';navigateTo('tickets','resolved');};
+  document.getElementById('kpi-open').onclick=()=>{tableFilter.status='__open__';navigateTo('tickets','__open__');};
+  renderTrendChart(); renderStatusChart(); renderCategoryChart(); renderRootCauseChart(); renderProductChart();
+}
+
+function renderTrendChart(){
+  const months=[...new Set(filteredData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+  destroyChart('trend');
+  charts.trend=new Chart(document.getElementById('trendChart').getContext('2d'),{type:'line',
+    data:{labels:months,datasets:[
+      {label:'Total Tiket',data:months.map(m=>filteredData.filter(r=>r.Month===m).length),borderColor:PALETTE.primary,backgroundColor:PALETTE.primary+'30',tension:0.4,fill:true,pointRadius:5,borderWidth:2.5},
+      {label:'Resolved',data:months.map(m=>filteredData.filter(r=>r.Month===m&&r.Status==='resolved').length),borderColor:PALETTE.emerald,backgroundColor:PALETTE.emerald+'20',tension:0.4,fill:true,pointRadius:4,borderWidth:2,borderDash:[5,3]}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true}}}});
+}
+function renderStatusChart(){
+  const entries=topN(countBy(filteredData,'Status'),10);
+  destroyChart('status');
+  charts.status=new Chart(document.getElementById('statusChart').getContext('2d'),{type:'doughnut',
+    data:{labels:entries.map(x=>x[0]),datasets:[{data:entries.map(x=>x[1]),backgroundColor:MULTI.map(c=>c+'cc'),borderColor:MULTI,borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}});
+}
+function renderCategoryChart(){
+  const top=topN(countBy(filteredData,'Category'),10);
+  destroyChart('category');
+  charts.category=new Chart(document.getElementById('categoryChart').getContext('2d'),{type:'bar',
+    data:{labels:top.map(x=>x[0].length>30?x[0].slice(0,28)+'…':x[0]),datasets:[{label:'Tiket',data:top.map(x=>x[1]),backgroundColor:PALETTE.primary+'99',borderColor:PALETTE.primary,borderWidth:2,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+}
+function renderRootCauseChart(){
+  const entries=topN(countBy(filteredData,'Root Cause'),8);
+  destroyChart('rootCause');
+  charts.rootCause=new Chart(document.getElementById('rootCauseChart').getContext('2d'),{type:'doughnut',
+    data:{labels:entries.map(x=>x[0]),datasets:[{data:entries.map(x=>x[1]),backgroundColor:[PALETTE.primary,PALETTE.emerald,PALETTE.amber,PALETTE.rose,PALETTE.cyan,PALETTE.pink,PALETTE.sky,PALETTE.orange].map(c=>c+'cc'),borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}});
+}
+function renderProductChart(){
+  const entries=topN(countBy(filteredData,'Product Source'),10);
+  destroyChart('product');
+  charts.product=new Chart(document.getElementById('productChart').getContext('2d'),{type:'bar',
+    data:{labels:entries.map(x=>x[0]),datasets:[{label:'Tiket',data:entries.map(x=>x[1]),backgroundColor:MULTI.map(c=>c+'99'),borderColor:MULTI,borderWidth:2,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}}});
+}
+
+// ===== TICKETS TABLE =====
+tableSearchEl.addEventListener('input',()=>{tableFilter.search=tableSearchEl.value.toLowerCase();currentPage=1;renderTicketTable();});
+tableStatusEl.addEventListener('change',()=>{tableFilter.status=tableStatusEl.value;currentPage=1;renderTicketTable();});
+tableRootCauseEl.addEventListener('change',()=>{tableFilter.rootCause=tableRootCauseEl.value;currentPage=1;renderTicketTable();});
+document.getElementById('ticketTable').addEventListener('click',e=>{
+  const th=e.target.closest('th.sortable');if(!th)return;
+  if(sortCol===th.dataset.col)sortDir=sortDir==='asc'?'desc':'asc';else{sortCol=th.dataset.col;sortDir='desc';}
+  renderTicketTable();
+});
+
+function renderTicketTable(){
+  let data=[...filteredData];
+  if(tableFilter.search)data=data.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(tableFilter.search)));
+  if(tableFilter.status==='__open__')data=data.filter(r=>!['resolved','closed'].includes((r.Status||'').toLowerCase()));
+  else if(tableFilter.status)data=data.filter(r=>(r.Status||'').toLowerCase()===tableFilter.status.toLowerCase());
+  if(tableFilter.rootCause)data=data.filter(r=>r['Root Cause']===tableFilter.rootCause);
+  data.sort((a,b)=>{
+    let av=a[sortCol]||'',bv=b[sortCol]||'';
+    if(sortCol==='Date Submitted'||sortCol==='Id'){av=parseFloat(av)||av;bv=parseFloat(bv)||bv;}
+    return sortDir==='asc'?(av>bv?1:-1):(av<bv?1:-1);
+  });
+  tableCountEl.textContent=`${data.length} tiket`;
+  const page=data.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE);
+  const statusMap={
+    resolved:`<span class="badge badge-resolved">resolved</span>`,
+    assigned:`<span class="badge badge-open">assigned</span>`,
+    acknowledged:`<span class="badge badge-pending">acknowledged</span>`,
+    feedback:`<span class="badge badge-pending">feedback</span>`,
+    closed:`<span class="badge" style="background:rgba(148,163,184,0.15);color:#94a3b8">closed</span>`,
+  };
+  tableBodyEl.innerHTML=page.map(r=>{
+    const sla=parseFloat(r.SLA);
+    const slaClass=isNaN(sla)?'':sla<=1?'sla-good':sla<=3?'sla-warn':'sla-bad';
+    const statusBadge=statusMap[(r.Status||'').toLowerCase()]||`<span class="badge">${r.Status||'-'}</span>`;
+    return `<tr>
+      <td><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary}">#${r.Id}</a></td>
+      <td style="white-space:nowrap;font-size:0.78rem">${(r['Date Submitted']||'').split(' ')[0]||'-'}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Summary||''}">${r.Summary||'-'}</td>
+      <td style="font-size:0.78rem">${r.Category||'-'}</td>
+      <td><span class="badge" style="background:${PALETTE.primary}22;color:${PALETTE.primary}">${r['Product Source']||'-'}</span></td>
+      <td>${statusBadge}</td>
+      <td style="font-size:0.78rem">${r['Root Cause']||'-'}</td>
+      <td><span class="${slaClass}">${isNaN(sla)?'-':sla+' hr'}</span></td>
+      <td style="font-size:0.78rem">${r['Branch Name']||r.Branch||'-'}</td>
+    </tr>`;
+  }).join('');
+  renderPagination(data.length);
+}
+function renderPagination(total){
+  const pages=Math.ceil(total/PAGE_SIZE);
+  if(pages<=1){paginationEl.innerHTML='';return;}
+  let html='';
+  for(let i=1;i<=Math.min(pages,7);i++)html+=`<button class="page-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  if(pages>7)html+=`<span style="color:#94a3b8;padding:0 8px">… ${pages} hal.</span>`;
+  paginationEl.innerHTML=html;
+}
+function goPage(p){currentPage=p;renderTicketTable();}
+
+// ===== SLA SECTION =====
+function renderSLA(){
+  const resolved=filteredData.filter(r=>r.Status==='resolved');
+  const slaVals=resolved.map(r=>parseFloat(r.SLA)).filter(v=>!isNaN(v));
+  document.getElementById('slaMet').textContent=slaVals.filter(v=>v<=1).length;
+  document.getElementById('slaWarning').textContent=slaVals.filter(v=>v>1&&v<=3).length;
+  document.getElementById('slaBreached').textContent=slaVals.filter(v=>v>3).length;
+  document.getElementById('slaOnProgress').textContent=filteredData.filter(r=>r.Status==='assigned'||r.Status==='acknowledged').length;
+  renderSlaDistChart(slaVals); renderSlaMonthChart(); renderSlaAssigneeChart(resolved); renderSlaProductChart();
+}
+function renderSlaDistChart(slaVals){
+  const buckets={'0-1':0,'1-2':0,'2-3':0,'3-5':0,'5-10':0,'>10':0};
+  slaVals.forEach(v=>{if(v<=1)buckets['0-1']++;else if(v<=2)buckets['1-2']++;else if(v<=3)buckets['2-3']++;else if(v<=5)buckets['3-5']++;else if(v<=10)buckets['5-10']++;else buckets['>10']++;});
+  destroyChart('slaDist');
+  charts.slaDist=new Chart(document.getElementById('slaDistChart').getContext('2d'),{type:'bar',
+    data:{labels:Object.keys(buckets),datasets:[{label:'Jumlah Tiket',data:Object.values(buckets),backgroundColor:[PALETTE.emerald,PALETTE.cyan,PALETTE.amber,PALETTE.orange,PALETTE.rose,PALETTE.rose].map(c=>c+'bb'),borderColor:[PALETTE.emerald,PALETTE.cyan,PALETTE.amber,PALETTE.orange,PALETTE.rose,PALETTE.rose],borderWidth:2,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}}});
+}
+function renderSlaMonthChart(){
+  const months=[...new Set(filteredData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+  const avgByMonth=months.map(m=>{const vals=filteredData.filter(r=>r.Month===m&&r.Status==='resolved').map(r=>parseFloat(r.SLA)).filter(v=>!isNaN(v));return vals.length?avg(vals).toFixed(1):0;});
+  destroyChart('slaMonth');
+  charts.slaMonth=new Chart(document.getElementById('slaMonthChart').getContext('2d'),{type:'line',
+    data:{labels:months,datasets:[{label:'Avg SLA (hari)',data:avgByMonth,borderColor:PALETTE.amber,backgroundColor:PALETTE.amber+'30',tension:0.4,fill:true,pointRadius:5,borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}}});
+}
+function renderSlaAssigneeChart(resolved){
+  const m={};
+  resolved.forEach(r=>{const a=r['Assigned To']||r.Assignee||'Unknown';if(!m[a])m[a]={total:0,sum:0};const sla=parseFloat(r.SLA);if(!isNaN(sla)){m[a].total++;m[a].sum+=sla;}});
+  const top=Object.entries(m).filter(([,v])=>v.total>=2).map(([k,v])=>[k,(v.sum/v.total).toFixed(1)]).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  destroyChart('slaAssignee');
+  charts.slaAssignee=new Chart(document.getElementById('slaAssigneeChart').getContext('2d'),{type:'bar',
+    data:{labels:top.map(x=>x[0]),datasets:[{label:'Avg SLA',data:top.map(x=>x[1]),backgroundColor:top.map((_,i)=>MULTI[i%MULTI.length]+'99'),borderColor:top.map((_,i)=>MULTI[i%MULTI.length]),borderWidth:2,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+}
+function renderSlaProductChart(){
+  const products=[...new Set(filteredData.map(r=>r['Product Source']).filter(Boolean))];
+  const avgSla=products.map(p=>{const vals=filteredData.filter(r=>r['Product Source']===p&&r.Status==='resolved').map(r=>parseFloat(r.SLA)).filter(v=>!isNaN(v));return vals.length?avg(vals).toFixed(1):0;});
+  destroyChart('slaProduct');
+  charts.slaProduct=new Chart(document.getElementById('slaProductChart').getContext('2d'),{type:'bar',
+    data:{labels:products,datasets:[{label:'Avg SLA',data:avgSla,backgroundColor:MULTI.map(c=>c+'99'),borderColor:MULTI,borderWidth:2,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}}});
+}
+
+// ===== BRANCH SECTION =====
+// Shared datalabels plugin (inline, no CDN needed)
+const dataLabelsPlugin = {
+  id:'inlineLabels',
+  afterDatasetsDraw(chart){
+    const ctx=chart.ctx;
+    chart.data.datasets.forEach((ds,di)=>{
+      const meta=chart.getDatasetMeta(di);
+      if(meta.hidden)return;
+      meta.data.forEach((bar,bi)=>{
+        const val=ds.data[bi];
+        if(!val||val===0)return;
+        ctx.save();
+        ctx.font='bold 10px Inter,sans-serif';
+        ctx.fillStyle='rgba(255,255,255,0.9)';
+        ctx.textAlign='center';
+        ctx.textBaseline='middle';
+        const {x,y,width,height}=bar.getProps(['x','y','width','height'],true);
+        // For horizontal bar: place label inside bar if wide enough
+        if(chart.config.options.indexAxis==='y'){
+          const labelX=bar.x-val.toString().length*3.5-4;
+          if(bar.x-bar.base>20)ctx.fillText(val,Math.max(bar.base+val.toString().length*3.5+4,labelX+val.toString().length*3.5+4),bar.y);
+        } else {
+          if(bar.base-bar.y>14)ctx.fillText(val,bar.x,bar.y+10);
+        }
+        ctx.restore();
+      });
+    });
+  }
+};
+
+// Navigate to Tiket with combined filters
+function navToTickets(opts={}){
+  // opts: { branch, category, rootCause }
+  tableFilter.status='';
+  tableFilter.search='';
+  tableFilter.rootCause=opts.rootCause||'';
+  // Store branch/category filter for ticket table
+  window._branchFilter=opts.branch||'';
+  window._categoryFilter=opts.category||'';
+  navigateTo('tickets','');
+  // Apply after render
+  setTimeout(()=>{
+    if(opts.branch||opts.category){
+      const q=[opts.branch,opts.category].filter(Boolean).join(' ').toLowerCase();
+      tableSearchEl.value=q;
+      tableFilter.search=q;
+      renderTicketTable();
+    }
+  },50);
+}
+
+function renderBranch(){
+  const counts=countBy(filteredData.map(r=>({...r,_bn:branchField(r)})),'_bn');
+  const top20=topN(counts,20);
+  const top20names=top20.map(x=>x[0]);
+  const top10names=top20.slice(0,10).map(x=>x[0]);
+
+  // ── 1. Breakdown Kategori per Cabang (replaces branchBar) ──────────
+  const top5cats=topN(countBy(filteredData,'Category'),5).map(x=>x[0]);
+  const catDatasets=top5cats.map((c,i)=>({
+    label:c.length>22?c.slice(0,20)+'…':c,
+    data:top20names.map(b=>filteredData.filter(r=>branchField(r)===b&&r.Category===c).length),
+    backgroundColor:MULTI[i]+'bb',borderColor:MULTI[i],borderWidth:2,borderRadius:3
+  }));
+  catDatasets.push({
+    label:'Others',
+    data:top20names.map(b=>filteredData.filter(r=>branchField(r)===b&&!top5cats.includes(r.Category)).length),
+    backgroundColor:'#94a3b8'+'88',borderColor:'#94a3b8',borderWidth:2,borderRadius:3
+  });
+
+  // Compute totals per branch for label overlay
+  const branchTotals=top20names.map(b=>filteredData.filter(r=>branchField(r)===b).length);
+
+  destroyChart('branchCat');
+  const ctxCat=document.getElementById('branchCatChart').getContext('2d');
+  charts.branchCat=new Chart(ctxCat,{
+    type:'bar',
+    plugins:[{
+      id:'totalLabel',
+      afterDatasetsDraw(chart){
+        const ctx2=chart.ctx;
+        const meta=chart.getDatasetMeta(chart.data.datasets.length-1);
+        meta.data.forEach((bar,bi)=>{
+          const total=branchTotals[bi];
+          if(!total)return;
+          ctx2.save();
+          ctx2.font='bold 11px Inter,sans-serif';
+          ctx2.fillStyle='#f1f5f9';
+          ctx2.textAlign='left';
+          ctx2.textBaseline='middle';
+          ctx2.fillText(total, bar.x+5, bar.y);
+          ctx2.restore();
+        });
+      }
+    }],
+    data:{labels:top20names,datasets:catDatasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{position:'top',labels:{font:{size:9}}},
+        tooltip:{callbacks:{
+          footer(items){return 'Total: '+branchTotals[items[0].dataIndex];}
+        }}
+      },
+      scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}},
+      onClick(evt,els){
+        if(!els.length)return;
+        const b=top20names[els[0].index];
+        navToTickets({branch:b});
+      }
+    }
+  });
+
+  // ── 2. Root Cause per Cabang (TOP 10, replaces branchStatus position) ──
+  const rcs=['System','People','Process'],rcColors=[PALETTE.primary,PALETTE.amber,PALETTE.emerald];
+  destroyChart('branchRc');
+  const ctxRc=document.getElementById('branchRcChart').getContext('2d');
+  charts.branchRc=new Chart(ctxRc,{
+    type:'bar',
+    plugins:[{
+      id:'rcInlineLabel',
+      afterDatasetsDraw(chart){
+        const ctx2=chart.ctx;
+        chart.data.datasets.forEach((ds,di)=>{
+          const meta=chart.getDatasetMeta(di);
+          if(meta.hidden)return;
+          meta.data.forEach((bar,bi)=>{
+            const val=ds.data[bi];
+            if(!val)return;
+            const w=bar.x-bar.base;
+            if(w<18)return;
+            ctx2.save();
+            ctx2.font='bold 10px Inter,sans-serif';
+            ctx2.fillStyle='rgba(255,255,255,0.9)';
+            ctx2.textAlign='center';
+            ctx2.textBaseline='middle';
+            ctx2.fillText(val,bar.base+w/2,bar.y);
+            ctx2.restore();
+          });
+        });
+      }
+    }],
+    data:{
+      labels:top10names,
+      datasets:rcs.map((rc,i)=>({
+        label:rc,
+        data:top10names.map(b=>filteredData.filter(r=>branchField(r)===b&&r['Root Cause']===rc).length),
+        backgroundColor:rcColors[i]+'99',borderColor:rcColors[i],borderWidth:2,borderRadius:3
+      }))
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{position:'top'}},
+      scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}},
+      onClick(evt,els){
+        if(!els.length)return;
+        const b=top10names[els[0].index];
+        const rc=rcs[els[0].datasetIndex];
+        navToTickets({branch:b,rootCause:rc});
+      }
+    }
+  });
+
+  // ── 3+4. Overview Kategori ──────────────────────────────────────────
+  renderCategoryOverview();
+
+  // ── 5+6. Overview Branch ────────────────────────────────────────────
+  renderBranchOverview();
+}
+
+// ===== OVERVIEW KATEGORI (Req #3 & #4) =====
+let catOvState = { selectedCats:[], selectedMonths:[], allCats:[], allMonths:[] };
+
+function renderCategoryOverview(){
+  const allMonths=[...new Set(filteredData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+  const catCounts=countBy(filteredData,'Category');
+  const allCatsSorted=topN(catCounts,999).map(x=>x[0]);
+  const top5=allCatsSorted.slice(0,5);
+
+  // Init state if first time or data changed
+  if(catOvState.allCats.join()!==allCatsSorted.join()||catOvState.allMonths.join()!==allMonths.join()){
+    catOvState.allCats=allCatsSorted;
+    catOvState.allMonths=allMonths;
+    catOvState.selectedCats=[...top5,'Others'];
+    catOvState.selectedMonths=[...allMonths];
+  }
+
+  _buildCatOvDropdowns();
+  _drawCatOvChart();
+  _drawCatOvTable();
+}
+
+function _buildCatOvDropdowns(){
+  const catDd=document.getElementById('catOvCatDrop');
+  const monDd=document.getElementById('catOvMonDrop');
+  if(!catDd||!monDd)return;
+
+  const {allCats,allMonths,selectedCats,selectedMonths}=catOvState;
+
+  catDd.innerHTML=`
+    <div class="ov-dd-scroll">
+      <label class="ov-cb-row"><input type="checkbox" id="catOvAllCat" ${selectedCats.length===allCats.length+1?'checked':''}> <span>ALL</span></label>
+      ${allCats.map(c=>`<label class="ov-cb-row"><input type="checkbox" class="catOvCatCb" value="${c}" ${selectedCats.includes(c)?'checked':''}> <span>${c.length>35?c.slice(0,33)+'…':c}</span></label>`).join('')}
+      <label class="ov-cb-row"><input type="checkbox" class="catOvCatCb" value="Others" ${selectedCats.includes('Others')?'checked':''}> <span>Others</span></label>
+    </div>`;
+
+  monDd.innerHTML=`
+    <div class="ov-dd-scroll">
+      <label class="ov-cb-row"><input type="checkbox" id="catOvAllMon" ${selectedMonths.length===allMonths.length?'checked':''}> <span>ALL</span></label>
+      ${allMonths.map(m=>`<label class="ov-cb-row"><input type="checkbox" class="catOvMonCb" value="${m}" ${selectedMonths.includes(m)?'checked':''}> <span>${m}</span></label>`).join('')}
+    </div>`;
+
+  // ALL category toggle
+  document.getElementById('catOvAllCat').onchange=function(){
+    const cbs=document.querySelectorAll('.catOvCatCb');
+    if(this.checked){catOvState.selectedCats=[...catOvState.allCats,'Others'];}
+    else{catOvState.selectedCats=[];}
+    cbs.forEach(cb=>cb.checked=this.checked);
+    _drawCatOvChart();_drawCatOvTable();
+  };
+  document.querySelectorAll('.catOvCatCb').forEach(cb=>{
+    cb.onchange=()=>{
+      catOvState.selectedCats=Array.from(document.querySelectorAll('.catOvCatCb:checked')).map(x=>x.value);
+      _drawCatOvChart();_drawCatOvTable();
+    };
+  });
+
+  // ALL month toggle
+  document.getElementById('catOvAllMon').onchange=function(){
+    const cbs=document.querySelectorAll('.catOvMonCb');
+    if(this.checked){catOvState.selectedMonths=[...catOvState.allMonths];}
+    else{catOvState.selectedMonths=[];}
+    cbs.forEach(cb=>cb.checked=this.checked);
+    _drawCatOvChart();_drawCatOvTable();
+  };
+  document.querySelectorAll('.catOvMonCb').forEach(cb=>{
+    cb.onchange=()=>{
+      catOvState.selectedMonths=Array.from(document.querySelectorAll('.catOvMonCb:checked')).map(x=>x.value);
+      _drawCatOvChart();_drawCatOvTable();
+    };
+  });
+}
+
+function _getCatOvData(){
+  const {selectedCats,selectedMonths,allCats}=catOvState;
+  const top5=allCats.slice(0,5);
+  const months=selectedMonths.length?selectedMonths:catOvState.allMonths;
+  const cats=selectedCats.filter(c=>c!=='Others');
+  return months.map(month=>{
+    const monthRows=filteredData.filter(r=>r.Month===month);
+    const obj={month};
+    cats.forEach(c=>{ obj[c]=monthRows.filter(r=>r.Category===c).length; });
+    if(selectedCats.includes('Others')){
+      obj['Others']=monthRows.filter(r=>!cats.includes(r.Category)).length;
+    }
+    return obj;
+  });
+}
+
+function _drawCatOvChart(){
+  const {selectedCats}=catOvState;
+  const data=_getCatOvData();
+  const cats=selectedCats.filter(c=>c!=='Others');
+  const showOthers=selectedCats.includes('Others');
+
+  const datasets=[
+    ...cats.map((c,i)=>({
+      label:c.length>20?c.slice(0,18)+'…':c,
+      data:data.map(d=>d[c]||0),
+      backgroundColor:MULTI[i%MULTI.length]+'99',borderColor:MULTI[i%MULTI.length],borderWidth:2,borderRadius:4
+    })),
+    ...(showOthers?[{label:'Others',data:data.map(d=>d['Others']||0),backgroundColor:'#94a3b8'+'88',borderColor:'#94a3b8',borderWidth:2,borderRadius:4}]:[])
+  ];
+
+  destroyChart('catOv');
+  const ctx=document.getElementById('catOvChart');if(!ctx)return;
+  charts.catOv=new Chart(ctx.getContext('2d'),{
+    type:'bar',
+    plugins:[{
+      id:'catOvLabel',
+      afterDatasetsDraw(chart){
+        const ctx2=chart.ctx;
+        chart.data.datasets.forEach((ds,di)=>{
+          const meta=chart.getDatasetMeta(di);
+          if(meta.hidden)return;
+          meta.data.forEach((bar,bi)=>{
+            const val=ds.data[bi];if(!val)return;
+            const h=bar.base-bar.y;if(h<14)return;
+            ctx2.save();ctx2.font='bold 10px Inter,sans-serif';
+            ctx2.fillStyle='rgba(255,255,255,0.92)';ctx2.textAlign='center';ctx2.textBaseline='middle';
+            ctx2.fillText(val,bar.x,bar.y+h/2);ctx2.restore();
+          });
+        });
+      }
+    }],
+    data:{labels:data.map(d=>d.month),datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:10}}},
+        tooltip:{mode:'index',intersect:false}
+      },
+      scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}
+    }
+  });
+}
+
+function _drawCatOvTable(){
+  const {selectedCats,selectedMonths,allCats}=catOvState;
+  const months=selectedMonths.length?selectedMonths:catOvState.allMonths;
+  const cats=selectedCats.filter(c=>c!=='Others');
+  const showOthers=selectedCats.includes('Others');
+  const allSelected=[...cats,...(showOthers?['Others']:[])];
+
+  const tbody=document.getElementById('catOvTableBody');if(!tbody)return;
+  const rows=[];
+
+  allSelected.forEach(cat=>{
+    const branches=[...new Set(filteredData.filter(r=>cat==='Others'?!allCats.slice(0,5).includes(r.Category):r.Category===cat).map(r=>branchField(r)).filter(Boolean))];
+
+    branches.forEach(branch=>{
+      months.forEach(month=>{
+        const monthBranchRows=filteredData.filter(r=>r.Month===month&&branchField(r)===branch&&(cat==='Others'?!allCats.slice(0,5).includes(r.Category):r.Category===cat));
+        if(!monthBranchRows.length)return;
+        const rcMap=countBy(monthBranchRows,'Root Cause');
+        const topRc=topN(rcMap,1)[0];
+        // Tags
+        const tagRowsHere=filteredTagData.filter(r=>r.Month_Number&&monthNumToName(r.Month_Number)===month&&normBranch(r['Branch Name']||r['Branch']||'')===normBranch(branch));
+        const tagMap=countBy(tagRowsHere.filter(r=>r.Tag&&r.Tag.trim()!==''),'Tag');
+        const topTags=topN(tagMap,3).map(([t,n])=>`${t}(${n})`).join(', ')||'—';
+        rows.push({cat,branch,month,count:monthBranchRows.length,rc:topRc?topRc[0]:'—',rcCount:topRc?topRc[1]:0,tags:topTags});
+      });
+    });
+  });
+
+  // Compute avg per cat-month
+  const avgMap={};
+  rows.forEach(r=>{
+    const k=r.cat+'|'+r.month;
+    if(!avgMap[k])avgMap[k]={total:0,branches:new Set()};
+    avgMap[k].total+=r.count; avgMap[k].branches.add(r.branch);
+  });
+
+  // Group by cat for rowspan
+  let html='';
+  let lastCat='',lastMon='';
+  rows.forEach((r,i)=>{
+    const catSpan=rows.filter(x=>x.cat===r.cat).length;
+    const monSpan=rows.filter(x=>x.cat===r.cat&&x.month===r.month).length;
+    const k=r.cat+'|'+r.month;
+    const avg2=avgMap[k]?(avgMap[k].total/avgMap[k].branches.size).toFixed(2):'—';
+    let catCell='',monCell='';
+    if(r.cat!==lastCat){catCell=`<td rowspan="${catSpan}" style="font-weight:700;color:${PALETTE.primary};vertical-align:top;border-right:1px solid rgba(255,255,255,0.08)">${r.cat}</td>`;lastCat=r.cat;lastMon='';}
+    if(r.month!==lastMon||catCell){monCell=`<td rowspan="${monSpan}" style="font-weight:600;vertical-align:top;border-right:1px solid rgba(255,255,255,0.06)">${r.month}</td>`;lastMon=r.month;}
+    html+=`<tr>
+      ${catCell}${monCell}
+      <td style="font-size:0.78rem">${r.branch}</td>
+      <td style="font-weight:700;color:${PALETTE.rose};text-align:right">${r.count}</td>
+      <td style="font-size:0.78rem">${r.rc}</td>
+      <td style="text-align:right;color:${PALETTE.amber}">${r.rcCount}</td>
+      <td style="text-align:right;color:${PALETTE.cyan};font-weight:600">${avg2}</td>
+      <td style="font-size:0.76rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.tags}</td>
+    </tr>`;
+  });
+  tbody.innerHTML=html||'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px">Pilih kategori dan bulan di atas</td></tr>';
+}
+
+// ===== OVERVIEW BRANCH (Req #5 & #6) =====
+let brOvState = { selectedBranches:[], selectedMonths:[], allBranches:[], allMonths:[] };
+
+function renderBranchOverview(){
+  const allMonths=[...new Set(filteredData.map(r=>r.Month).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+  const brCounts=countBy(filteredData.map(r=>({...r,_bn:branchField(r)})),'_bn');
+  const allBranchesSorted=topN(brCounts,999).map(x=>x[0]);
+  const top10=allBranchesSorted.slice(0,10);
+
+  if(brOvState.allBranches.join()!==allBranchesSorted.join()||brOvState.allMonths.join()!==allMonths.join()){
+    brOvState.allBranches=allBranchesSorted;
+    brOvState.allMonths=allMonths;
+    brOvState.selectedBranches=[...top10];
+    brOvState.selectedMonths=[...allMonths];
+  }
+
+  _buildBrOvDropdowns();
+  _drawBrOvChart();
+  _drawBrOvTable();
+}
+
+function _buildBrOvDropdowns(){
+  const brDd=document.getElementById('brOvBrDrop');
+  const monDd=document.getElementById('brOvMonDrop');
+  if(!brDd||!monDd)return;
+  const {allBranches,allMonths,selectedBranches,selectedMonths}=brOvState;
+
+  brDd.innerHTML=`<div class="ov-dd-scroll">
+    <label class="ov-cb-row"><input type="checkbox" id="brOvAllBr" ${selectedBranches.length===allBranches.length?'checked':''}> <span>ALL</span></label>
+    ${allBranches.map(b=>`<label class="ov-cb-row"><input type="checkbox" class="brOvBrCb" value="${b}" ${selectedBranches.includes(b)?'checked':''}> <span>${b.length>30?b.slice(0,28)+'…':b}</span></label>`).join('')}
   </div>`;
-  el.querySelectorAll('button[data-p]').forEach(b=>b.onclick=()=>onGo(parseInt(b.dataset.p)));
-  const prev=el.querySelector('button[data-dir="prev"]'); if(prev&&cur>1)prev.onclick=()=>onGo(cur-1);
-  const next=el.querySelector('button[data-dir="next"]'); if(next&&cur<total)next.onclick=()=>onGo(cur+1);
+
+  monDd.innerHTML=`<div class="ov-dd-scroll">
+    <label class="ov-cb-row"><input type="checkbox" id="brOvAllMon" ${selectedMonths.length===allMonths.length?'checked':''}> <span>ALL</span></label>
+    ${allMonths.map(m=>`<label class="ov-cb-row"><input type="checkbox" class="brOvMonCb" value="${m}" ${selectedMonths.includes(m)?'checked':''}> <span>${m}</span></label>`).join('')}
+  </div>`;
+
+  document.getElementById('brOvAllBr').onchange=function(){
+    const cbs=document.querySelectorAll('.brOvBrCb');
+    brOvState.selectedBranches=this.checked?[...brOvState.allBranches]:[];
+    cbs.forEach(cb=>cb.checked=this.checked);
+    _drawBrOvChart();_drawBrOvTable();
+  };
+  document.querySelectorAll('.brOvBrCb').forEach(cb=>{
+    cb.onchange=()=>{
+      brOvState.selectedBranches=Array.from(document.querySelectorAll('.brOvBrCb:checked')).map(x=>x.value);
+      _drawBrOvChart();_drawBrOvTable();
+    };
+  });
+  document.getElementById('brOvAllMon').onchange=function(){
+    const cbs=document.querySelectorAll('.brOvMonCb');
+    brOvState.selectedMonths=this.checked?[...brOvState.allMonths]:[];
+    cbs.forEach(cb=>cb.checked=this.checked);
+    _drawBrOvChart();_drawBrOvTable();
+  };
+  document.querySelectorAll('.brOvMonCb').forEach(cb=>{
+    cb.onchange=()=>{
+      brOvState.selectedMonths=Array.from(document.querySelectorAll('.brOvMonCb:checked')).map(x=>x.value);
+      _drawBrOvChart();_drawBrOvTable();
+    };
+  });
+}
+
+function _drawBrOvChart(){
+  const {selectedBranches,selectedMonths}=brOvState;
+  const months=selectedMonths.length?selectedMonths:brOvState.allMonths;
+
+  const datasets=selectedBranches.map((b,i)=>({
+    label:b.length>18?b.slice(0,16)+'…':b,
+    data:months.map(m=>filteredData.filter(r=>r.Month===m&&branchField(r)===b).length),
+    backgroundColor:MULTI[i%MULTI.length]+'99',borderColor:MULTI[i%MULTI.length],borderWidth:2,borderRadius:4
+  }));
+
+  destroyChart('brOv');
+  const ctx=document.getElementById('brOvChart');if(!ctx)return;
+  charts.brOv=new Chart(ctx.getContext('2d'),{
+    type:'bar',
+    plugins:[{
+      id:'brOvLabel',
+      afterDatasetsDraw(chart){
+        const ctx2=chart.ctx;
+        chart.data.datasets.forEach((ds,di)=>{
+          const meta=chart.getDatasetMeta(di);
+          if(meta.hidden)return;
+          meta.data.forEach((bar,bi)=>{
+            const val=ds.data[bi];if(!val)return;
+            const h=bar.base-bar.y;if(h<14)return;
+            ctx2.save();ctx2.font='bold 10px Inter,sans-serif';
+            ctx2.fillStyle='rgba(255,255,255,0.92)';ctx2.textAlign='center';ctx2.textBaseline='middle';
+            ctx2.fillText(val,bar.x,bar.y+h/2);ctx2.restore();
+          });
+        });
+      }
+    }],
+    data:{labels:months,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:9}}},tooltip:{mode:'index',intersect:false}},
+      scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}
+    }
+  });
+}
+
+function _drawBrOvTable(){
+  const {selectedBranches,selectedMonths}=brOvState;
+  const months=selectedMonths.length?selectedMonths:brOvState.allMonths;
+  const tbody=document.getElementById('brOvTableBody');if(!tbody)return;
+
+  let html='';
+  selectedBranches.forEach(branch=>{
+    const branchRows=filteredData.filter(r=>branchField(r)===branch&&selectedMonths.includes(r.Month));
+    const top10cats=topN(countBy(branchRows,'Category'),10).map(([c,n])=>c);
+
+    // Issue per month
+    const issuePerMonth=months.map(m=>filteredData.filter(r=>branchField(r)===branch&&r.Month===m).length);
+    const totalIssue=issuePerMonth.reduce((a,b)=>a+b,0);
+    const avgIssue=months.length?(totalIssue/months.length).toFixed(2):'—';
+
+    // RC per month
+    const rcPerMonth=months.map(m=>{
+      const rcMap=countBy(filteredData.filter(r=>branchField(r)===branch&&r.Month===m),'Root Cause');
+      return topN(rcMap,1)[0]||['—',0];
+    });
+    const totalRc=rcPerMonth.reduce((a,b)=>a+b[1],0);
+    const avgRc=months.length?(totalRc/months.length).toFixed(2):'—';
+
+    const branchSpan=Math.max(1,months.length);
+    months.forEach((month,mi)=>{
+      const monthIssue=issuePerMonth[mi];
+      const monthRc=rcPerMonth[mi];
+      let branchCell='';
+      if(mi===0){
+        branchCell=`<td rowspan="${branchSpan}" style="font-weight:700;color:${PALETTE.primary};vertical-align:top;border-right:1px solid rgba(255,255,255,0.08)">
+          ${branch}
+          <div style="font-size:0.72rem;color:#64748b;margin-top:4px">${top10cats.slice(0,3).join(', ')}</div>
+        </td>`;
+      }
+      html+=`<tr>
+        ${branchCell}
+        <td style="font-size:0.78rem;font-weight:600">${month}</td>
+        <td style="font-weight:700;color:${PALETTE.rose};text-align:right">${monthIssue}</td>
+        <td style="text-align:right;color:${PALETTE.emerald};font-weight:600">${mi===0?avgIssue:'—'}</td>
+        <td style="font-size:0.78rem">${monthRc[0]}</td>
+        <td style="text-align:right;color:${PALETTE.amber}">${monthRc[1]}</td>
+        <td style="text-align:right;color:${PALETTE.cyan};font-weight:600">${mi===0?avgRc:'—'}</td>
+      </tr>`;
+    });
+  });
+
+  tbody.innerHTML=html||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:20px">Pilih cabang dan bulan di atas</td></tr>';
+}
+
+// ===== TAG SECTION =====
+function renderTagSection(){
+  const withTag=filteredTagData.filter(r=>r.Tag&&r.Tag.trim()!=='');
+  if(withTag.length===0)return;
+  renderTopTagsChart(withTag);
+  renderTagCategoryChart(withTag);
+  renderBranchTagChart(withTag); // FIX #3
+  renderTagMonthChart(withTag);
+  renderTagBranchTable(withTag);
+}
+function renderTopTagsChart(data){
+  const top=topN(countBy(data,'Tag'),20);
+  destroyChart('topTags');
+  charts.topTags=new Chart(document.getElementById('topTagsChart').getContext('2d'),{type:'bar',
+    data:{labels:top.map(x=>x[0]),datasets:[{label:'Frekuensi',data:top.map(x=>x[1]),backgroundColor:MULTI.slice(0,top.length).map(c=>c+'99'),borderColor:MULTI.slice(0,top.length),borderWidth:2,borderRadius:5}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+}
+function renderTagCategoryChart(data){
+  const top=topN(countBy(data,'Category'),10);
+  destroyChart('tagCategory');
+  charts.tagCategory=new Chart(document.getElementById('tagCategoryChart').getContext('2d'),{type:'doughnut',
+    data:{labels:top.map(x=>x[0].length>28?x[0].slice(0,26)+'…':x[0]),datasets:[{data:top.map(x=>x[1]),backgroundColor:MULTI.slice(0,top.length).map(c=>c+'cc'),borderColor:MULTI,borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}});
+}
+
+// FIX #3: Top 20 cabang × Top 20 tag + Others (1 unit fixed width)
+function renderBranchTagChart(data){
+  const issueCounts=countBy(filteredData.map(r=>({...r,_bn:branchField(r)})),'_bn');
+  const top20Branches=topN(issueCounts,20).map(x=>x[0]);
+  const top20Tags=topN(countBy(data,'Tag'),20).map(x=>x[0]);
+  const datasets=top20Tags.map((tag,i)=>({
+    label:tag.length>20?tag.slice(0,18)+'…':tag,
+    data:top20Branches.map(b=>data.filter(r=>normBranch(r['Branch Name']||r['Branch']||'')===normBranch(b)&&r.Tag===tag).length),
+    backgroundColor:MULTI[i%MULTI.length]+'99',borderColor:MULTI[i%MULTI.length],borderWidth:1,borderRadius:2
+  }));
+  // Others: fixed width = 1 unit per bar (symbolic, tidak proporsional)
+  datasets.push({
+    label:'Others',
+    data:top20Branches.map(()=>1),
+    backgroundColor:'#64748b'+'66',borderColor:'#64748b',borderWidth:1,borderRadius:2
+  });
+  destroyChart('branchTag');
+  charts.branchTag=new Chart(document.getElementById('branchTagChart').getContext('2d'),{type:'bar',
+    data:{labels:top20Branches,datasets},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{position:'top',labels:{font:{size:9},boxWidth:10}},
+        tooltip:{callbacks:{label(ctx){if(ctx.dataset.label==='Others')return ' Others (tidak terdeteksi tag)';return ` ${ctx.dataset.label}: ${ctx.parsed.x}`;}}}},
+      scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}}}});
+}
+function renderTagMonthChart(data){
+  const months=[...new Set(data.map(r=>monthNumToName(r.Month_Number)).filter(Boolean))].sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+  const top5Tags=topN(countBy(data,'Tag'),5).map(x=>x[0]);
+  destroyChart('tagMonth');
+  charts.tagMonth=new Chart(document.getElementById('tagMonthChart').getContext('2d'),{type:'line',
+    data:{labels:months,datasets:top5Tags.map((tag,i)=>({label:tag.length>22?tag.slice(0,20)+'…':tag,data:months.map(m=>data.filter(r=>monthNumToName(r.Month_Number)===m&&r.Tag===tag).length),borderColor:MULTI[i%MULTI.length],backgroundColor:MULTI[i%MULTI.length]+'30',tension:0.4,fill:false,pointRadius:4,borderWidth:2}))},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:10}}}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}}});
+}
+
+function renderTagBranchTable(tagRows){
+  const tagMap={};
+  tagRows.forEach(r=>{
+    const tag=(r.Tag||'').trim();if(!tag)return;
+    const branch=(r['Branch Name']||r['Branch']||'Unknown').trim();
+    if(!tagMap[tag])tagMap[tag]={};
+    tagMap[tag][branch]=(tagMap[tag][branch]||0)+1;
+  });
+  window._tagBranchRawData=Object.entries(tagMap).map(([tag,branchObj])=>{
+    const total=Object.values(branchObj).reduce((a,b)=>a+b,0);
+    const topBranches=Object.entries(branchObj).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    return{tag,total,topBranches};
+  });
+  tagTableSortField='total';tagTableSortDir='desc';
+  _applyTagTableSortAndFilter('');
+  const searchEl=document.getElementById('tagTableSearch');
+  if(searchEl)searchEl.oninput=()=>_applyTagTableSortAndFilter(searchEl.value.toLowerCase().trim());
+  const sortTagHdr=document.getElementById('tagTableSortHeader');
+  const sortTotHdr=document.getElementById('tagTotalSortHeader');
+  if(sortTagHdr)sortTagHdr.onclick=()=>{if(tagTableSortField==='tag')tagTableSortDir=tagTableSortDir==='asc'?'desc':'asc';else{tagTableSortField='tag';tagTableSortDir='asc';}_applyTagTableSortAndFilter((document.getElementById('tagTableSearch')||{}).value||'');};
+  if(sortTotHdr)sortTotHdr.onclick=()=>{if(tagTableSortField==='total')tagTableSortDir=tagTableSortDir==='asc'?'desc':'asc';else{tagTableSortField='total';tagTableSortDir='desc';}_applyTagTableSortAndFilter((document.getElementById('tagTableSearch')||{}).value||'');};
+}
+function _applyTagTableSortAndFilter(query){
+  let rows=(window._tagBranchRawData||[]).slice();
+  if(query)rows=rows.filter(row=>row.tag.toLowerCase().includes(query)||row.topBranches.some(([b])=>b.toLowerCase().includes(query)));
+  rows.sort((a,b)=>{if(tagTableSortField==='tag')return tagTableSortDir==='asc'?a.tag.localeCompare(b.tag):b.tag.localeCompare(a.tag);return tagTableSortDir==='asc'?a.total-b.total:b.total-a.total;});
+  const tbody=document.getElementById('tagBranchTableBody');if(!tbody)return;
+  tbody.innerHTML=rows.map((row,i)=>{
+    const cells=row.topBranches.slice(0,5);while(cells.length<5)cells.push(['—','']);
+    const branchCols=cells.map(([b,n])=>`<td style="font-size:0.78rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b}</td><td style="font-weight:700;color:${PALETTE.cyan};text-align:right">${n||''}</td>`).join('');
+    return `<tr><td><strong style="color:${PALETTE.primary}">${i+1}</strong></td><td><span style="background:${PALETTE.primary}22;color:${PALETTE.primary};padding:3px 9px;border-radius:12px;font-size:0.8rem;white-space:nowrap">${row.tag}</span></td><td style="font-weight:700;color:${PALETTE.emerald};text-align:right;font-size:1rem">${row.total}</td>${branchCols}</tr>`;
+  }).join('');
+}
+
+// ===== DRAWDOWN SECTION =====
+// FIX #6: Get issue count for a DD branch — try exact match first, then fuzzy
+function getIssueCountForDDBranch(ddBranchName){
+  const nb=normBranch(ddBranchName);
+  // Exact match
+  let count=filteredData.filter(r=>normBranch(branchField(r))===nb).length;
+  if(count>0)return count;
+  // Fuzzy: find best matching branch name from Data_Source
+  const allIssueBranches=[...new Set(filteredData.map(r=>branchField(r)).filter(Boolean))];
+  const match=allIssueBranches.find(b=>matchBranches(b,ddBranchName));
+  if(match)return filteredData.filter(r=>normBranch(branchField(r))===normBranch(match)).length;
+  return 0;
+}
+
+// FIX #6: Get matching filteredData rows for a DD branch name
+function getIssueRowsForDDBranch(ddBranchName){
+  const nb=normBranch(ddBranchName);
+  let rows=filteredData.filter(r=>normBranch(branchField(r))===nb);
+  if(rows.length>0)return rows;
+  const allIssueBranches=[...new Set(filteredData.map(r=>branchField(r)).filter(Boolean))];
+  const match=allIssueBranches.find(b=>matchBranches(b,ddBranchName));
+  if(match)return filteredData.filter(r=>normBranch(branchField(r))===normBranch(match));
+  return[];
+}
+
+// FIX #6: Get tag rows for a DD branch
+function getTagRowsForDDBranch(ddBranchName){
+  const nb=normBranch(ddBranchName);
+  let rows=filteredTagData.filter(r=>normBranch(r['Branch Name']||r['Branch']||'')===nb);
+  if(rows.length>0)return rows;
+  const allTagBranches=[...new Set(filteredTagData.map(r=>r['Branch Name']||r['Branch']||'').filter(Boolean))];
+  const match=allTagBranches.find(b=>matchBranches(b,ddBranchName));
+  if(match)return filteredTagData.filter(r=>normBranch(r['Branch Name']||r['Branch']||'')===normBranch(match));
+  return[];
 }
 
 function renderDrawdownSection(){
@@ -569,38 +1145,22 @@ function renderDrawdownSection(){
   renderDDVsIssueChart(branchDD);
   renderDDMonthChart();
   renderDDStatusChart();
-  renderDDTable(branchDD);
-  renderDDBestBranchChart(branchDD);
-  // store for paging
-  _ddVsIssueBranchDD=branchDD; _ddTableBranchDD=branchDD; _ddBestBranchDD=branchDD;
-  _ddVsIssuePage=1; _ddTablePage=1; _ddBestPage=1;
+  renderDDTable(branchDD);       // FIX #4 #5
+  renderDDBestBranchChart(branchDD); // FIX #6
 }
 
 function renderDDVsIssueChart(branchDD){
-  const all=Object.entries(branchDD).sort((a,b)=>b[1]-a[1]);
-  const totalPages=Math.ceil(all.length/DD_PAGE);
-  const _page=Math.min(_ddVsIssuePage,totalPages||1);
-  const page=all.slice((_page-1)*DD_PAGE, _page*DD_PAGE);
-  const labels=page.map(x=>x[0]);
-  const ddCounts=page.map(x=>x[1]);
+  const top20=Object.entries(branchDD).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  const labels=top20.map(x=>x[0]);
+  const ddCounts=top20.map(x=>x[1]);
   const issueCounts=labels.map(b=>getIssueCountForDDBranch(b));
-  // Dynamic height: 28px per row min 300px
-  const h=Math.max(300,page.length*30);
-  const wrap=document.getElementById('ddVsIssueChartWrap');
-  if(wrap)wrap.style.height=h+'px';
   destroyChart('ddVsIssue');
   charts.ddVsIssue=new Chart(document.getElementById('ddVsIssueChart').getContext('2d'),{type:'bar',
     data:{labels,datasets:[
       {label:'MUF-Drawdown',data:ddCounts,backgroundColor:PALETTE.emerald+'99',borderColor:PALETTE.emerald,borderWidth:2,borderRadius:4},
       {label:'Issue/Tiket',data:issueCounts,backgroundColor:PALETTE.rose+'99',borderColor:PALETTE.rose,borderWidth:2,borderRadius:4}
     ]},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
-      plugins:{legend:{position:'top'},
-        tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8',
-          callbacks:{afterBody(items){const i=items[0].dataIndex;const dd=ddCounts[i],iss=issueCounts[i];const r=dd>0?(iss/dd*100).toFixed(1):'0';return[`Rasio: ${r}% (${iss} issue / ${dd} DD)`];}}}
-      },
-      scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
-  _renderPager('ddVsIssuePager',_page,totalPages,p=>{_ddVsIssuePage=p;renderDDVsIssueChart(_ddVsIssueBranchDD);});
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{position:'top'}},scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
 }
 
 function renderDDMonthChart(){
@@ -629,158 +1189,90 @@ function renderDDStatusChart(){
     options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}});
 }
 
+// FIX #4: Rasio format "1 DD : X issue" (2 desimal)
+// FIX #5: Tambahkan kolom Issue Terbesar & Tag Terbanyak
 function renderDDTable(branchDD){
-  // Hitung total aplikasi per cabang (semua status dari filteredDDData)
-  const totalAppByBranch={};
-  filteredDDData.forEach(r=>{const b=(r['Branch Name']||'Unknown').trim();totalAppByBranch[b]=(totalAppByBranch[b]||0)+1;});
-
-  const all=Object.entries(branchDD).sort((a,b)=>b[1]-a[1]);
-  const totalPages=Math.ceil(all.length/DD_PAGE);
-  const _page=Math.min(_ddTablePage,totalPages||1);
-  const start=(_page-1)*DD_PAGE;
-  const pageData=all.slice(start,start+DD_PAGE);
-
-  const tableData=pageData.map(([branch,ddCount],i)=>{
+  const top20=Object.entries(branchDD).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  const tableData=top20.map(([branch,ddCount],i)=>{
     const issueRows=getIssueRowsForDDBranch(branch);
     const issueCount=issueRows.length;
+    // FIX #4: rasio = issue/dd, format "1 : X.XX"
     const ratioNum=ddCount>0?issueCount/ddCount:0;
-    const ratioPct=`${(ratioNum*100).toFixed(1)}%`;
+    const ratioStr=`1 : ${ratioNum.toFixed(2)}`;
+    // FIX #5: Top category
     const catCount=countBy(issueRows,'Category');
     const topCat=topN(catCount,1)[0];
     const topCatStr=topCat?`${topCat[0]} (${topCat[1]})`:'—';
+    // FIX #5: Top tag
     const tagRows=getTagRowsForDDBranch(branch);
     const tagCount=countBy(tagRows.filter(r=>r.Tag&&r.Tag.trim()!==''),'Tag');
     const topTag=topN(tagCount,1)[0];
     const topTagStr=topTag?`${topTag[0]} (${topTag[1]})`:'—';
-    const totalApp=totalAppByBranch[branch]||ddCount;
-    const ratioDDPct=totalApp>0?`${(ddCount/totalApp*100).toFixed(1)}%`:'—';
-    return{rank:start+i+1,branch,ddCount,issueCount,ratioPct,ratioNum,topCatStr,topTagStr,ratioDDPct};
+    return{rank:i+1,branch,ddCount,issueCount,ratioStr,ratioNum,topCatStr,topTagStr};
   });
   window._ddTableData=tableData;
   document.getElementById('ddTableBody').innerHTML=tableData.map(row=>{
     const cls=row.ratioNum>0.3?'sla-bad':row.ratioNum>0.1?'sla-warn':'sla-good';
     return`<tr>
-      <td style="text-align:center;color:#64748b;font-size:0.78rem">${row.rank}</td>
-      <td style="font-size:0.81rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.branch}"><strong>${row.branch}</strong></td>
-      <td style="text-align:right"><span style="color:${PALETTE.emerald};font-weight:700">${row.ddCount}</span></td>
-      <td style="text-align:right;color:#94a3b8;font-size:0.8rem">${row.ratioDDPct}</td>
-      <td style="text-align:right"><span style="color:${PALETTE.rose};font-weight:700">${row.issueCount}</span></td>
-      <td style="text-align:right"><span class="${cls}" style="white-space:nowrap;font-weight:700">${row.ratioPct}</span></td>
-      <td style="font-size:0.77rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.topCatStr}">${row.topCatStr}</td>
-      <td style="font-size:0.77rem;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.topTagStr}">${row.topTagStr}</td>
+      <td><strong style="color:${PALETTE.primary}">#${row.rank}</strong></td>
+      <td><strong>${row.branch}</strong></td>
+      <td><span style="color:${PALETTE.emerald};font-weight:700">${row.ddCount}</span></td>
+      <td><span style="color:${PALETTE.rose};font-weight:700">${row.issueCount}</span></td>
+      <td><span class="${cls}" style="white-space:nowrap">${row.ratioStr}</span></td>
+      <td style="font-size:0.78rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.topCatStr}">${row.topCatStr}</td>
+      <td style="font-size:0.78rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.topTagStr}">${row.topTagStr}</td>
     </tr>`;
   }).join('');
-  _renderPager('ddTablePager',_page,totalPages,p=>{_ddTablePage=p;renderDDTable(_ddTableBranchDD);});
 }
 
-// ── helpers stars ─────────────────────────────────────────────────────
-function _ddStars(ratio){
-  if(ratio===0||ratio<0.02)return 5;
-  if(ratio<0.05)return 4;
-  if(ratio<0.10)return 3;
-  if(ratio<0.20)return 2;
-  return 1;
-}
-function _ddStarHtml(stars,row){
-  const starColors=['#f43f5e','#f59e0b','#f59e0b','#10b981','#10b981'];
-  const filled='★'.repeat(stars)+'☆'.repeat(5-stars);
-  const color=starColors[stars-1]||'#94a3b8';
-  const pct=(row.ratio*100).toFixed(1);
-  const tip=`${row.branch}\nDD: ${row.ddCount}  |  Issue: ${row.issueCount}\nRasio: ${pct}%`;
-  return `<span class="star-tip" data-tip="${tip}" style="color:${color};font-size:1rem;letter-spacing:1px">${filled}</span>`;
-}
-
+// FIX #6: Best branch patokannya branch dari Data_Source, dipetakan ke DD_SimFast
 function renderDDBestBranchChart(branchDD){
-  // Aggregasi issue per canonical name (gabungkan varian nama)
-  const canonIssueCounts={};
-  const canonDisplayName={};
-  filteredData.forEach(r=>{
-    const raw=branchField(r); if(!raw)return;
-    const c=canonBranch(raw);
-    if(!canonDisplayName[c])canonDisplayName[c]=raw;
-    canonIssueCounts[c]=(canonIssueCounts[c]||0)+1;
-  });
-  // Aggregasi DD per canonical name
-  const canonDDCounts={};
-  Object.entries(branchDD).forEach(([ddBr,cnt])=>{
-    const c=canonBranch(ddBr);
-    if(c) canonDDCounts[c]=(canonDDCounts[c]||0)+cnt;
-  });
-  // Gabungkan — hanya cabang yang ada DD-nya
-  const allBranchData=Object.entries(canonIssueCounts).map(([c,issueCount])=>{
-    const ddCount=canonDDCounts[c]||0;
-    if(ddCount===0)return null;
-    const ratio=issueCount/ddCount;
-    return{branch:canonDisplayName[c]||c,ddCount,issueCount,ratio};
-  }).filter(Boolean).sort((a,b)=>a.ratio!==b.ratio?a.ratio-b.ratio:b.ddCount-a.ddCount);
+  // Gunakan branch dari Data_Source sebagai patokan
+  const issueBranchCounts=countBy(filteredData.map(r=>({...r,_bn:branchField(r)})),'_bn');
+  const allIssueBranches=Object.keys(issueBranchCounts).filter(b=>b&&b!=='Unknown');
 
-  const totalPages=Math.ceil(allBranchData.length/DD_PAGE);
-  const _page=Math.min(_ddBestPage,totalPages||1);
-  const start=(_page-1)*DD_PAGE;
-  const best20=allBranchData.slice(start,start+DD_PAGE);
-
-  // Plugin: label % di kanan bar terpanjang
-  const ratioLabelPlugin={
-    id:'ddBestRatioLabel',
-    afterDraw(chart){
-      const ctx=chart.ctx, xScale=chart.scales.x;
-      best20.forEach((row,i)=>{
-        const xPx=xScale.getPixelForValue(Math.max(row.ddCount,row.issueCount));
-        const meta=chart.getDatasetMeta(0); if(!meta.data[i])return;
-        const yPx=meta.data[i].y;
-        const rn=row.ratio;
-        const color=rn===0||rn<0.05?'#10b981':rn<0.15?'#f59e0b':'#f43f5e';
-        ctx.save();
-        ctx.font='bold 10px Inter,sans-serif';
-        ctx.fillStyle=color; ctx.textAlign='left'; ctx.textBaseline='middle';
-        ctx.fillText(`${(rn*100).toFixed(1)}%`,xPx+7,yPx);
-        ctx.restore();
-      });
+  const allBranchData=allIssueBranches.map(issueBranch=>{
+    const issueCount=issueBranchCounts[issueBranch]||0;
+    // Cari drawdown yang cocok (exact atau fuzzy)
+    const nb=normBranch(issueBranch);
+    let ddCount=branchDD[issueBranch]||0;
+    if(ddCount===0){
+      // try fuzzy
+      const ddBranchKey=Object.keys(branchDD).find(b=>matchBranches(b,issueBranch));
+      if(ddBranchKey)ddCount=branchDD[ddBranchKey]||0;
     }
-  };
+    if(ddCount===0)return null; // tidak punya drawdown, skip
+    const ratio=issueCount/ddCount;
+    return{branch:issueBranch,ddCount,issueCount,ratio};
+  }).filter(Boolean);
 
-  const h=Math.max(340,best20.length*30);
-  const wrap=document.getElementById('ddBestChartWrap');
-  if(wrap)wrap.style.height=h+'px';
+  // Sort: rasio terkecil dulu, jika sama → DD terbanyak dulu
+  const best20=allBranchData.sort((a,b)=>a.ratio!==b.ratio?a.ratio-b.ratio:b.ddCount-a.ddCount).slice(0,20);
 
   destroyChart('ddBestBranch');
-  charts.ddBestBranch=new Chart(document.getElementById('ddBestBranchChart').getContext('2d'),{
-    type:'bar',plugins:[ratioLabelPlugin],
+  charts.ddBestBranch=new Chart(document.getElementById('ddBestBranchChart').getContext('2d'),{type:'bar',
     data:{labels:best20.map(x=>x.branch),datasets:[
       {label:'MUF-Drawdown',data:best20.map(x=>x.ddCount),backgroundColor:PALETTE.emerald+'99',borderColor:PALETTE.emerald,borderWidth:2,borderRadius:4},
       {label:'Issue/Tiket',data:best20.map(x=>x.issueCount),backgroundColor:PALETTE.rose+'99',borderColor:PALETTE.rose,borderWidth:2,borderRadius:4}
     ]},
     options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
-      layout:{padding:{right:68}},
-      plugins:{legend:{position:'top'},
-        tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8',
-          callbacks:{afterBody(items){const idx=items[0].dataIndex;const row=best20[idx];const pct=(row.ratio*100).toFixed(1);return[`Rasio: ${pct}% (${row.issueCount} issue / ${row.ddCount} DD)`];}}}
-      },
-      scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+      plugins:{legend:{position:'top'},tooltip:{callbacks:{afterBody(items){const idx=items[0].dataIndex;const row=best20[idx];return[`Rasio: 1 DD : ${row.ratio.toFixed(2)} issue`];}}}},
+      scales:{x:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{display:false},ticks:{font:{size:11}}}}}});
 
-  _renderPager('ddBestChartPager',_page,totalPages,p=>{_ddBestPage=p;renderDDBestBranchChart(_ddBestBranchDD);});
-
-  // Tabel: #, Cabang, DD, Issue, Rasio%, Stars
   const medals=['🥇','🥈','🥉'];
   document.getElementById('ddBestTableBody').innerHTML=best20.map((row,i)=>{
-    const globalRank=start+i;
-    const pct=(row.ratio*100).toFixed(1);
-    const stars=_ddStars(row.ratio);
-    const tip=`${row.branch}\nDD: ${row.ddCount}  |  Issue: ${row.issueCount}\nRasio: ${pct}%`;
-    const starColors=['#f43f5e','#f59e0b','#f59e0b','#10b981','#10b981'];
-    const starColor=starColors[stars-1]||'#94a3b8';
-    const starHtml=`<span class="star-tip" data-tip="${tip}" style="color:${starColor};font-size:0.95rem;letter-spacing:0.5px">${'★'.repeat(stars)+'☆'.repeat(5-stars)}</span>`;
-    const ratioColor=row.ratio<0.05?'#10b981':row.ratio<0.15?'#f59e0b':'#f43f5e';
+    const rn=row.ratio;
+    const cls=rn===0?'sla-good':rn<0.05?'sla-good':rn<0.15?'sla-warn':'sla-bad';
+    const perf=rn===0?'⭐⭐⭐ Zero Issue!':rn<0.05?'⭐⭐⭐ Sangat Baik':rn<0.1?'⭐⭐ Baik':rn<0.2?'⭐ Cukup':'Perlu Perhatian';
     return`<tr>
-      <td style="text-align:center;font-size:0.88rem">${medals[globalRank]||globalRank+1}</td>
-      <td style="font-size:0.78rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.branch}">${row.branch}</td>
-      <td style="text-align:right;font-size:0.8rem;color:${PALETTE.emerald};font-weight:700">${row.ddCount}</td>
-      <td style="text-align:right;font-size:0.8rem;color:${PALETTE.rose};font-weight:700">${row.issueCount}</td>
-      <td style="text-align:right;font-weight:700;font-size:0.82rem;color:${ratioColor}">${pct}%</td>
-      <td style="text-align:center">${starHtml}</td>
+      <td style="font-size:1.1rem">${medals[i]||`#${i+1}`}</td>
+      <td><strong>${row.branch}</strong></td>
+      <td><span style="color:${PALETTE.emerald};font-weight:700">${row.ddCount}</span></td>
+      <td><span style="color:${PALETTE.rose};font-weight:700">${row.issueCount}</span></td>
+      <td><span class="${cls}" style="white-space:nowrap">1 : ${rn.toFixed(2)}</span></td>
+      <td style="font-size:0.82rem">${perf}</td>
     </tr>`;
   }).join('');
-  _renderPager('ddBestTablePager',_page,totalPages,p=>{_ddBestPage=p;renderDDBestBranchChart(_ddBestBranchDD);});
 }
 
 document.getElementById('exportDDCSV').addEventListener('click',()=>exportDDTable('csv'));
@@ -1017,8 +1509,7 @@ function exportPDF(data, filename) {
   doc.setFontSize(13); doc.setTextColor(99, 102, 241);
   doc.text('Mantis Dashboard Report', 14, 14);
   doc.setFontSize(8); doc.setTextColor(148, 163, 184);
-  const bulanLabel=filterState.months.length===0?'Semua':filterState.months.join(', ');
-  doc.text(`Bulan: ${bulanLabel} | Produk: ${filterProduct.value || 'Semua'} | Generated: ${new Date().toLocaleString('id-ID')}`, 14, 21);
+  doc.text(`Bulan: ${filterMonth.value || 'Semua'} | Produk: ${filterProduct.value || 'Semua'} | Generated: ${new Date().toLocaleString('id-ID')}`, 14, 21);
   doc.autoTable({ head: [headers], body: rows.map(row => headers.map(h => String(row[h] || ''))), startY: 26, styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [99, 102, 241], textColor: 255, fontStyle: 'bold' }, alternateRowStyles: { fillColor: [245, 246, 250] }, margin: { left: 10, right: 10 } });
   doc.save(filename || `mantis-report-${new Date().toISOString().slice(0, 10)}.pdf`);
 }
@@ -1029,15 +1520,407 @@ document.getElementById('exportXLSX').addEventListener('click', () => exportXLSX
 document.getElementById('exportPDF').addEventListener('click', () => exportPDF());
 
 // ===== DROPDOWN TOGGLE =====
-// ===================================================================
-// ===== OVERVIEW SIMFAST SECTION ====================================
-// ===================================================================
-const SF_RC=['People','Process','System'];
-const SF_RC_COLORS={People:'#f43f5e',Process:'#f59e0b',System:'#6366f1'};
-const SF_RC_LIGHT={People:'#f43f5e44',Process:'#f59e0b44',System:'#6366f144'};
-let _sfTrendRC='All';          // RC filter for trend line
-let _sfDetailMonthFilter=null; // clicked month key
-let _sfDetailRCFilter=null;    // clicked KPI RC
+
+// ===== ADDED FEATURES =====
+function getRowYear(r){
+  const ds=r['Date Submitted']||r['date_submitted']||'';
+  const m=ds.match(/\b(20\d{2})\b/); return m?m[1]:'';
+}
+
+function getRowMonthKey(r){
+  // Key used for filtering & grouping: "2025 January" or just "January"
+  const yr=getRowYear(r); return yr?`${yr} ${r.Month}`:r.Month||'';
+}
+
+
+
+// ===== SIDEBAR =====
+sidebarToggleEl.addEventListener('click', () => {
+  sidebarEl.classList.toggle('collapsed');
+  mainEl.classList.toggle('sidebar-collapsed');
+});
+mobileMenuBtn.addEventListener('click', () => sidebarEl.classList.toggle('mobile-open'));
+// ===== LOADING =====
+
+function parseMasterDate(s){
+  if(!s||!String(s).trim())return null;
+  s=String(s).trim();
+  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m)return new Date(+m[3],+m[2]-1,+m[1]);
+  const parts=s.split(/[\s,]+/);
+  if(parts.length>=3){const d=parseInt(parts[0]),mon=ID_MONTHS_MAP[parts[1].toLowerCase()],y=parseInt(parts[2]);if(!isNaN(d)&&mon!==undefined&&!isNaN(y))return new Date(y,mon,d);}
+  const d=new Date(s);return isNaN(d.getTime())?null:d;
+}
+
+function parseIssueDate(s){
+  if(!s)return null;
+  if(s instanceof Date)return s;
+  let m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
+  m=String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m)return new Date(+m[3],+m[1]-1,+m[2]);
+  const d=new Date(s);return isNaN(d.getTime())?null:d;
+}
+
+function processMasterData(rows){
+  masterBranchMap.clear();
+  rows.forEach(r=>{
+    const cab=(r['Cabang']||r['cabang']||'').trim();
+    const gel=(r['Gel_SimFast']||r['Gel']||'').toString().trim();
+    const impl=parseMasterDate(r['Implement']||r['implement']||'');
+    const wil=(r['Wilayah']||r['wilayah']||'').trim();
+    const hasSimfast=(r['Has_SimFast']||r['has_simfast']||'0')!=='0';
+    if(!cab)return;
+    masterBranchMap.set(canonBranch(cab),{branch:cab,gel,implementDate:impl,wilayah:wil,hasSimfast:hasSimfast&&impl!==null});
+  });
+}
+
+function isSimfastBranch(branchName){
+  const info=masterBranchMap.get(canonBranch(branchName));
+  return !!(info&&info.hasSimfast);
+}
+
+function getMasterInfo(branchName){
+  return masterBranchMap.get(canonBranch(branchName))||null;
+}
+
+function preprocessSimfastData(){
+  const masterLoaded=masterBranchMap.size>0;
+  allData.forEach(r=>{
+    const prod=r['Product Source']||'';
+    if(prod!=='SimFast'&&prod!=='Simascore'){r._sfActive=false;return;}
+    if(!masterLoaded){
+      // Fallback: tampilkan semua SimFast/Simascore tanpa filter implement date
+      r._sfActive=true; r._sfGel='?'; r._sfWilayah='';
+      return;
+    }
+    const issueDate=parseIssueDate(r['Date Submitted']);
+    if(!issueDate){r._sfActive=false;return;}
+    const info=getMasterInfo(branchField(r));
+    if(!info||!info.implementDate){
+      // Branch ada di data tapi tidak ada di master → tampilkan saja
+      r._sfActive=true; r._sfGel='?'; r._sfWilayah='';
+      return;
+    }
+    r._sfActive=issueDate>=info.implementDate;
+    r._sfGel=info.gel;
+    r._sfWilayah=info.wilayah;
+  });
+}
+
+function _rebuildBranchForProduct(){
+  // Always show ALL branches — Gel filter handles SimFast-specific filtering
+  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
+  filterState.branches=[];
+  _buildBranchChecklist(allBranches,'');
+}
+
+// FIX #6: Fuzzy branch matching — strip common suffixes for matching
+
+function _buildMonthChecklist(allMonthKeys){
+  const panel=document.getElementById('filterMonthPanel'); if(!panel)return;
+  panel.innerHTML=`<div class="ov-dd-scroll" style="max-height:300px">
+    <label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px;padding-bottom:6px">
+      <input type="checkbox" id="fmAllCb" checked> <span style="font-weight:700">Semua Bulan</span>
+    </label>`+
+    allMonthKeys.map(k=>`<label class="ov-cb-row">
+      <input type="checkbox" class="fmCb" value="${k}" checked>
+      <span>${k}</span>
+    </label>`).join('')+`</div>`;
+
+  document.getElementById('fmAllCb').onchange=function(){
+    if(this.checked){
+      // Klik "Semua Bulan" ON → pilih semua, clear filter
+      filterState.months=[];
+      document.querySelectorAll('.fmCb').forEach(cb=>cb.checked=true);
+    } else {
+      // Klik "Semua Bulan" OFF → uncheck semua individual
+      filterState.months=[];
+      document.querySelectorAll('.fmCb').forEach(cb=>cb.checked=false);
+    }
+    _updateMonthLabel(allMonthKeys); applyGlobalFilters();
+  };
+  document.querySelectorAll('.fmCb').forEach(cb=>{
+    cb.onchange=()=>{
+      const checked=Array.from(document.querySelectorAll('.fmCb:checked')).map(x=>x.value);
+      if(checked.length===0){
+        // Tidak ada yg dipilih → reset ke semua
+        filterState.months=[];
+        document.querySelectorAll('.fmCb').forEach(c=>c.checked=true);
+        const allCb=document.getElementById('fmAllCb'); if(allCb)allCb.checked=true;
+      } else {
+        // Ada yg dipilih — simpan, JANGAN auto-check "Semua Bulan"
+        filterState.months=checked.length===allMonthKeys.length?[]:checked;
+        // "Semua Bulan" checkbox: tidak diubah otomatis
+      }
+      _updateMonthLabel(allMonthKeys); applyGlobalFilters();
+    };
+  });
+  _updateMonthLabel(allMonthKeys);
+}
+
+function _updateMonthLabel(allMonthKeys){
+  const lbl=document.getElementById('filterMonthLabel'); if(!lbl)return;
+  const n=filterState.months.length;
+  lbl.textContent=n===0||n===allMonthKeys.length?'Semua Bulan':n===1?filterState.months[0]:`${n} Bulan Dipilih`;
+}
+
+function _buildBranchChecklist(allBranches, search){
+  const list=document.getElementById('filterBranchList'); if(!list)return;
+  const filtered=search?allBranches.filter(b=>b.toLowerCase().includes(search.toLowerCase())):allBranches;
+  const selAll=filterState.branches.length===0;
+  list.innerHTML=`<label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:4px">
+      <input type="checkbox" id="fbAllCb" ${selAll?'checked':''}> <span style="font-weight:600">Semua Cabang</span>
+    </label>`+
+    filtered.map(b=>`<label class="ov-cb-row">
+      <input type="checkbox" class="fbCb" value="${b}" ${filterState.branches.length===0||filterState.branches.includes(b)?'checked':''}>
+      <span style="font-size:0.78rem">${b.length>36?b.slice(0,34)+'…':b}</span>
+    </label>`).join('');
+  document.getElementById('fbAllCb').onchange=function(){
+    filterState.branches=[];
+    document.querySelectorAll('.fbCb').forEach(cb=>cb.checked=this.checked);
+    _updateBranchLabel(); applyGlobalFilters();
+  };
+  document.querySelectorAll('.fbCb').forEach(cb=>{
+    cb.onchange=()=>{
+      filterState.branches=Array.from(document.querySelectorAll('.fbCb:checked')).map(x=>x.value);
+      const allCb=document.getElementById('fbAllCb');
+      if(allCb) allCb.checked=filterState.branches.length===allBranches.length;
+      _updateBranchLabel(); applyGlobalFilters();
+    };
+  });
+  _updateBranchLabel();
+}
+
+function _updateBranchLabel(){
+  const lbl=document.getElementById('filterBranchLabel'); if(!lbl)return;
+  const n=filterState.branches.length;
+  lbl.textContent=n===0?'Semua Cabang':n===1?filterState.branches[0].split(' ').slice(-1)[0]:`${n} Cabang`;
+}
+
+// Exposed globally for branch search input
+
+function _buildGelFilter(){
+  const panel=document.getElementById('filterGelPanel');if(!panel)return;
+  const gels=[...new Set([...masterBranchMap.values()]
+    .filter(m=>m.hasSimfast&&m.gel!=='').map(m=>String(m.gel)))]
+    .sort((a,b)=>+a-+b);
+
+  if(!gels.length){
+    panel.innerHTML='<div style="padding:10px 12px;color:#64748b;font-size:0.78rem">Master belum dimuat</div>';
+    return;
+  }
+
+  panel.innerHTML=`<div class="ov-dd-scroll" style="max-height:280px">
+    <div style="padding:8px 12px 4px;font-size:0.72rem;color:#64748b;font-weight:600;letter-spacing:0.04em">PILIH GELOMBANG</div>
+    <label class="ov-cb-row" style="border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px">
+      <input type="checkbox" id="gelAllCb" ${filterState_gels.length===0?'checked':''}><span style="font-weight:600">Semua Gel</span>
+    </label>
+    ${gels.map(g=>`<label class="ov-cb-row">
+      <input type="checkbox" class="gelCb" value="${g}" ${filterState_gels.includes(g)?'checked':''}>
+      <span>Gel ${g}</span>
+    </label>`).join('')}
+  </div>`;
+
+  // ALL checkbox
+  document.getElementById('gelAllCb').onchange=function(){
+    if(this.checked){
+      filterState_gels=[];
+      document.querySelectorAll('.gelCb').forEach(cb=>cb.checked=true);
+    } else {
+      filterState_gels=[];
+      document.querySelectorAll('.gelCb').forEach(cb=>cb.checked=false);
+    }
+    _applyGelFilter();
+  };
+
+  // Individual gel checkboxes
+  document.querySelectorAll('.gelCb').forEach(cb=>{
+    cb.onchange=()=>{
+      const checked=Array.from(document.querySelectorAll('.gelCb:checked')).map(x=>x.value);
+      filterState_gels=checked.length===gels.length?[]:checked;
+      const allCb=document.getElementById('gelAllCb');
+      if(allCb)allCb.checked=filterState_gels.length===0;
+      _applyGelFilter();
+    };
+  });
+
+  _updateGelLabel();
+}
+
+function _updateGelLabel(){
+  const lbl=document.getElementById('filterGelLabel');if(!lbl)return;
+  lbl.textContent=filterState_gels.length===0?'Semua Gel':
+    filterState_gels.length===1?`Gel ${filterState_gels[0]}`:
+    `${filterState_gels.length} Gel`;
+}
+
+function _applyGelFilter(){
+  _updateGelLabel();
+  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
+  if(filterState_gels.length===0){
+    // Reset branch filter
+    filterState.branches=[];
+    _buildBranchChecklist(allBranches,'');
+  } else {
+    // Gabungkan cabang dari semua gel yang dipilih
+    const gelBranchCanons=new Set(
+      [...masterBranchMap.values()]
+        .filter(m=>filterState_gels.includes(String(m.gel))&&m.hasSimfast)
+        .map(m=>canonBranch(m.branch))
+    );
+    const matched=allBranches.filter(b=>gelBranchCanons.has(canonBranch(b)));
+    filterState.branches=matched;
+    _buildBranchChecklist(allBranches,'');
+    // Sync checkboxes
+    document.querySelectorAll('.fbCb').forEach(cb=>{
+      cb.checked=filterState.branches.includes(cb.value);
+    });
+    const allCb=document.getElementById('fbAllCb');
+    if(allCb)allCb.checked=false;
+    _updateBranchLabel();
+  }
+  applyGlobalFilters();
+}
+
+// ===== GLOBAL FILTERS =====
+
+function filterBranchDropdown(val){
+  const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
+  _buildBranchChecklist(allBranches, val);
+}
+
+// ── GEL FILTER ────────────────────────────────────────────────────────
+let filterState_gels = []; // [] = semua gel
+
+function _syncGelToBranch(){
+  const gelSel=filterGel(),brSel=filterBranch();
+  if(!gelSel||!brSel)return;
+  const selGels=Array.from(gelSel.options).filter(o=>o.selected&&!o.hidden).map(o=>o.value);
+  const allSel=selGels.length===0||selGels.length===gelSel.options.length;
+  if(allSel){Array.from(brSel.options).forEach(o=>o.selected=true);return;}
+  const gelCanons=new Set([...masterBranchMap.values()]
+    .filter(m=>selGels.includes(String(m.gel))&&m.hasSimfast)
+    .map(m=>canonBranch(m.branch)));
+  Array.from(brSel.options).forEach(o=>o.selected=gelCanons.has(canonBranch(o.value)));
+}
+
+function _populateBranchSelect(){
+  const sel=filterBranch();if(!sel)return;
+  const branches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
+  const prevSelected=Array.from(sel.options).filter(o=>o.selected).map(o=>o.value);
+  sel.innerHTML=branches.map(b=>`<option value="${b}">${b}</option>`).join('');
+  if(prevSelected.length&&prevSelected.length<branches.length){
+    Array.from(sel.options).forEach(o=>o.selected=prevSelected.includes(o.value));
+  } else {
+    Array.from(sel.options).forEach(o=>o.selected=true); // default: semua
+  }
+}
+
+// Populate gel native select
+
+function _populateGelSelect(){
+  const sel=filterGel();if(!sel)return;
+  const gels=[...new Set([...masterBranchMap.values()]
+    .filter(m=>m.hasSimfast&&m.gel!=='').map(m=>String(m.gel)))].sort((a,b)=>+a-+b);
+  sel.innerHTML=gels.length
+    ?gels.map(g=>`<option value="${g}">Gel ${g}</option>`).join('')
+    :'<option disabled value="">Master belum dimuat</option>';
+  Array.from(sel.options).forEach(o=>o.selected=true); // default: semua
+}
+
+// Branch search — hides options that don't match query
+
+function filterBranchOptions(val){
+  const sel=filterBranch();if(!sel)return;
+  const q=val.toLowerCase();
+  Array.from(sel.options).forEach(o=>{o.hidden=q?!o.value.toLowerCase().includes(q):false;});
+}
+
+// Gel → auto-select matching branches in filterBranch select
+
+function toggleDrop(id){
+  const panel=document.getElementById(id);
+  if(!panel)return;
+  if(panel.dataset.origStyle===undefined)
+    panel.dataset.origStyle=panel.getAttribute('style')||'';
+  const isOpen=panel.classList.contains('open');
+  _closeAllPanels();
+  if(isOpen)return;
+  if(window.innerWidth<900){
+    // MOBILE: gunakan <dialog> top layer
+    let dlg=document.getElementById('_mDlg');
+    if(!dlg){
+      dlg=document.createElement('dialog');
+      dlg.id='_mDlg';
+      dlg.innerHTML='<div id="_mDlgHdr"></div><div id="_mDlgBody"></div>';
+      document.body.appendChild(dlg);
+      dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close();});
+    }
+    // Header dengan tombol Selesai
+    document.getElementById('_mDlgHdr').innerHTML=
+      '<div style="width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:8px auto 10px"></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:0 16px 10px;border-bottom:1px solid rgba(255,255,255,0.1)">'+
+        '<span style="font-weight:700;color:#f1f5f9;font-size:0.92rem">Pilih Filter</span>'+
+        '<button onclick="document.getElementById(\'_mDlg\').close()" '+
+          'style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.35);color:#a5b4fc;'+
+          'padding:6px 18px;border-radius:20px;cursor:pointer;font-size:0.84rem;font-weight:600">Selesai ✓</button>'+
+      '</div>';
+    // Teleport panel ke body dialog
+    panel._op=panel.parentElement;
+    panel._on=panel.nextSibling;
+    document.getElementById('_mDlgBody').appendChild(panel);
+    panel.setAttribute('style','');       // bersihkan positioning lama
+    panel.classList.add('open');
+    // Restore saat dialog ditutup
+    dlg.addEventListener('close',()=>{
+      panel.classList.remove('open');
+      if(panel._op){panel._op.insertBefore(panel,panel._on||null);delete panel._op;delete panel._on;}
+      panel.setAttribute('style',panel.dataset.origStyle||'');
+    },{once:true});
+    dlg.showModal();
+  }else{
+    // DESKTOP: absolute dropdown seperti biasa
+    panel.classList.add('open');
+  }
+}
+
+function _closeAllPanels(){
+  // Tutup dialog mobile
+  const dlg=document.getElementById('_mDlg');
+  if(dlg&&dlg.open)dlg.close();
+  // Tutup desktop dropdowns
+  document.querySelectorAll('.ov-dd-panel.open').forEach(p=>{
+    p.classList.remove('open');
+    if(p.dataset.origStyle!==undefined)p.setAttribute('style',p.dataset.origStyle);
+    else p.removeAttribute('style');
+  });
+}
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.ov-dd-wrap')&&!e.target.closest('.ov-dd-panel'))_closeAllPanels();
+},true);
+window.addEventListener('scroll',_closeAllPanels,{passive:true});
+  const panel = document.getElementById(id);
+  if (!panel) return;
+
+  // Simpan inline-style asli sekali saja
+  if (panel.dataset.origStyle === undefined)
+    panel.dataset.origStyle = panel.getAttribute('style') || '';
+
+
+
+
+// Close dropdowns on outside click/tap
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.ov-dd-wrap')&&!e.target.closest('.ov-dd-panel'))_closeAllPanels();
+},true);
+window.addEventListener('scroll',_closeAllPanels,{passive:true});
+
+// ===== INIT =====
+window.addEventListener('DOMContentLoaded', () => { loadData(); });
 
 function _sfCountActiveBranches(){
   // Cutoff = akhir periode bulan terpilih
@@ -1063,6 +1946,24 @@ function _sfCountActiveBranches(){
   }).length;
 }
 
+function _sfGetMonthKeys(data){
+  const map={};
+  data.forEach(r=>{const k=getRowMonthKey(r);if(k)map[k]=1;});
+  return Object.keys(map).sort((a,b)=>{
+    const p=s=>{const q=s.split(' ');return(q.length>1?+q[0]:9999)*100+MONTH_ORDER.indexOf(q[q.length-1]);};
+    return p(a)-p(b);
+  });
+}
+
+// Short month label: "2026 January" → "Jan '26"
+
+function _sfShortMonth(k){
+  const p=k.split(' ');
+  return p.length>1?`${p[1].slice(0,3)} '${p[0].slice(2)}`:k.slice(0,3);
+}
+
+// ── TREND CHART ───────────────────────────────────────────────────────
+
 function renderOverviewSimfast(){
   const sec=document.getElementById('section-simfast');
   if(!sec||!sec.classList.contains('active'))return;
@@ -1077,6 +1978,7 @@ function renderOverviewSimfast(){
 }
 
 // ── KPI ──────────────────────────────────────────────────────────────
+
 function _renderSfKpi(data){
   const total=data.length;
   const activeBr=_sfCountActiveBranches();
@@ -1105,22 +2007,7 @@ window._sfKpiRCClick=function(rc){
 };
 
 // ── MONTH KEYS ────────────────────────────────────────────────────────
-function _sfGetMonthKeys(data){
-  const map={};
-  data.forEach(r=>{const k=getRowMonthKey(r);if(k)map[k]=1;});
-  return Object.keys(map).sort((a,b)=>{
-    const p=s=>{const q=s.split(' ');return(q.length>1?+q[0]:9999)*100+MONTH_ORDER.indexOf(q[q.length-1]);};
-    return p(a)-p(b);
-  });
-}
 
-// Short month label: "2026 January" → "Jan '26"
-function _sfShortMonth(k){
-  const p=k.split(' ');
-  return p.length>1?`${p[1].slice(0,3)} '${p[0].slice(2)}`:k.slice(0,3);
-}
-
-// ── TREND CHART ───────────────────────────────────────────────────────
 function _renderSfTrendChart(data){
   const keys=_sfGetMonthKeys(data);
   const byKey=k=>data.filter(r=>getRowMonthKey(r)===k);
@@ -1203,6 +2090,40 @@ function _renderSfTrendChart(data){
 window._sfSetTrendRC=function(rc){_sfTrendRC=rc;_renderSfTrendChart(filteredSFData);};
 
 // ── DETAIL TABLE ──────────────────────────────────────────────────────
+
+function _renderSfMonthBreakdown(data){
+  const el=document.getElementById('sfMonthBreakdownBody');if(!el)return;
+  const keys=_sfGetMonthKeys(data);
+  if(!keys.length){el.innerHTML='<tr><td colspan="5" style="text-align:center;color:#64748b;padding:10px">Tidak ada data</td></tr>';return;}
+  const totals=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k).length);
+  const mean=totals.reduce((a,b)=>a+b,0)/totals.length;
+  el.innerHTML=keys.map((k,i)=>{
+    const count=totals[i];
+    const prev=i>0?totals[i-1]:null;
+    let momHtml='<span style="color:#475569">—</span>';
+    if(prev!==null&&prev>0){
+      const pct=((count-prev)/prev*100).toFixed(1);
+      const sign=count>prev?'+':'';
+      const c=count>prev?'#f43f5e':count<prev?'#10b981':'#94a3b8';
+      momHtml=`<span style="color:${c};font-weight:600;white-space:nowrap">${sign}${pct}%</span>`;
+    }
+    const parts=k.split(' ');
+    const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
+    const monthEnd=yr&&mo>=0?new Date(yr,mo+1,0):null;
+    const activeBr=monthEnd?[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=monthEnd).length:'—';
+    const avgColor=count>mean?'#f43f5e':'#10b981';
+    return`<tr>
+      <td style="padding:5px 8px;white-space:nowrap;font-size:0.78rem">${k}</td>
+      <td style="text-align:right;font-weight:700;color:#f1f5f9;padding:5px 6px">${count}</td>
+      <td style="text-align:right;font-size:0.77rem;color:${avgColor};padding:5px 6px" title="Mean semua bulan">${mean.toFixed(1)}</td>
+      <td style="text-align:right;padding:5px 8px">${momHtml}</td>
+      <td style="text-align:right;font-size:0.77rem;color:#94a3b8;padding:5px 8px">${activeBr}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── TOP KATEGORI STACKED ──────────────────────────────────────────────
+
 function _renderSfDetailTable(){
   const card=document.getElementById('sfDetailTableCard');
   const thead=document.getElementById('sfDetailThead');
@@ -1255,38 +2176,7 @@ function _renderSfDetailTable(){
 window._sfClearDetailFilter=function(){_sfDetailMonthFilter=null;_sfDetailRCFilter=null;_renderSfDetailTable();};
 
 // ── MONTH BREAKDOWN TABLE ─────────────────────────────────────────────
-function _renderSfMonthBreakdown(data){
-  const el=document.getElementById('sfMonthBreakdownBody');if(!el)return;
-  const keys=_sfGetMonthKeys(data);
-  if(!keys.length){el.innerHTML='<tr><td colspan="5" style="text-align:center;color:#64748b;padding:10px">Tidak ada data</td></tr>';return;}
-  const totals=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k).length);
-  const mean=totals.reduce((a,b)=>a+b,0)/totals.length;
-  el.innerHTML=keys.map((k,i)=>{
-    const count=totals[i];
-    const prev=i>0?totals[i-1]:null;
-    let momHtml='<span style="color:#475569">—</span>';
-    if(prev!==null&&prev>0){
-      const pct=((count-prev)/prev*100).toFixed(1);
-      const sign=count>prev?'+':'';
-      const c=count>prev?'#f43f5e':count<prev?'#10b981':'#94a3b8';
-      momHtml=`<span style="color:${c};font-weight:600;white-space:nowrap">${sign}${pct}%</span>`;
-    }
-    const parts=k.split(' ');
-    const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
-    const monthEnd=yr&&mo>=0?new Date(yr,mo+1,0):null;
-    const activeBr=monthEnd?[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=monthEnd).length:'—';
-    const avgColor=count>mean?'#f43f5e':'#10b981';
-    return`<tr>
-      <td style="padding:5px 8px;white-space:nowrap;font-size:0.78rem">${k}</td>
-      <td style="text-align:right;font-weight:700;color:#f1f5f9;padding:5px 6px">${count}</td>
-      <td style="text-align:right;font-size:0.77rem;color:${avgColor};padding:5px 6px" title="Mean semua bulan">${mean.toFixed(1)}</td>
-      <td style="text-align:right;padding:5px 8px">${momHtml}</td>
-      <td style="text-align:right;font-size:0.77rem;color:#94a3b8;padding:5px 8px">${activeBr}</td>
-    </tr>`;
-  }).join('');
-}
 
-// ── TOP KATEGORI STACKED ──────────────────────────────────────────────
 function _renderSfCategoryStackedChart(data){
   const cats=Object.entries(
     data.reduce((acc,r)=>{acc[r.Category||'Lainnya']=(acc[r.Category||'Lainnya']||0)+1;return acc;},{}))
@@ -1322,6 +2212,7 @@ function _renderSfCategoryStackedChart(data){
 }
 
 // ── PIE CHART ROOT CAUSE ─────────────────────────────────────────────
+
 function _renderSfRCPieChart(data){
   const counts=SF_RC.map(rc=>data.filter(r=>r['Root Cause']===rc).length);
   const other=data.filter(r=>!SF_RC.includes(r['Root Cause'])).length;
@@ -1337,6 +2228,7 @@ function _renderSfRCPieChart(data){
 }
 
 // ── CATEGORY × RC × MONTH TABLE ──────────────────────────────────────
+
 function _renderSfCatRCMonthTable(data){
   const keys=_sfGetMonthKeys(data);
   const cats=Object.entries(
@@ -1428,115 +2320,42 @@ window._sfExportDetailXLS=function(){
 // ===== DROPDOWN — <dialog> TOP LAYER untuk mobile =====
 // Desktop: absolute dropdown seperti biasa
 // Mobile: showModal() di top layer — dijamin muncul di atas apapun termasuk backdrop-filter
-function toggleDrop(id){
-  const panel=document.getElementById(id);
-  if(!panel)return;
-  if(panel.dataset.origStyle===undefined)
-    panel.dataset.origStyle=panel.getAttribute('style')||'';
-  const isOpen=panel.classList.contains('open');
-  _closeAllPanels();
-  if(isOpen)return;
-  if(window.innerWidth<900){
-    // MOBILE: gunakan <dialog> top layer
-    let dlg=document.getElementById('_mDlg');
-    if(!dlg){
-      dlg=document.createElement('dialog');
-      dlg.id='_mDlg';
-      dlg.innerHTML='<div id="_mDlgHdr"></div><div id="_mDlgBody"></div>';
-      document.body.appendChild(dlg);
-      dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close();});
-    }
-    // Header dengan tombol Selesai
-    document.getElementById('_mDlgHdr').innerHTML=
-      '<div style="width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:8px auto 10px"></div>'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:0 16px 10px;border-bottom:1px solid rgba(255,255,255,0.1)">'+
-        '<span style="font-weight:700;color:#f1f5f9;font-size:0.92rem">Pilih Filter</span>'+
-        '<button onclick="document.getElementById(\'_mDlg\').close()" '+
-          'style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.35);color:#a5b4fc;'+
-          'padding:6px 18px;border-radius:20px;cursor:pointer;font-size:0.84rem;font-weight:600">Selesai ✓</button>'+
-      '</div>';
-    // Teleport panel ke body dialog
-    panel._op=panel.parentElement;
-    panel._on=panel.nextSibling;
-    document.getElementById('_mDlgBody').appendChild(panel);
-    panel.setAttribute('style','');       // bersihkan positioning lama
-    panel.classList.add('open');
-    // Restore saat dialog ditutup
-    dlg.addEventListener('close',()=>{
-      panel.classList.remove('open');
-      if(panel._op){panel._op.insertBefore(panel,panel._on||null);delete panel._op;delete panel._on;}
-      panel.setAttribute('style',panel.dataset.origStyle||'');
-    },{once:true});
-    dlg.showModal();
-  }else{
-    // DESKTOP: absolute dropdown seperti biasa
-    panel.classList.add('open');
+
+function _renderPager(elId,cur,total,onGo){
+  const el=document.getElementById(elId); if(!el)return;
+  if(total<=1){el.innerHTML='';return;}
+  let pagesHtml='';
+  for(let p=1;p<=total;p++){
+    pagesHtml+=`<button data-p="${p}" style="background:${p===cur?PALETTE.primary:'rgba(255,255,255,0.07)'};border:none;color:#f1f5f9;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:0.78rem;font-weight:${p===cur?700:400}">${p}</button>`;
   }
+  el.innerHTML=`<div style="display:flex;gap:5px;align-items:center;justify-content:center;padding:8px 0;flex-wrap:wrap">
+    <button data-dir="prev" style="background:rgba(255,255,255,0.07);border:none;color:${cur>1?'#f1f5f9':'#475569'};padding:4px 10px;border-radius:5px;cursor:${cur>1?'pointer':'default'};font-size:0.78rem">‹</button>
+    ${pagesHtml}
+    <button data-dir="next" style="background:rgba(255,255,255,0.07);border:none;color:${cur<total?'#f1f5f9':'#475569'};padding:4px 10px;border-radius:5px;cursor:${cur<total?'pointer':'default'};font-size:0.78rem">›</button>
+    <span style="color:#64748b;font-size:0.75rem">hal ${cur}/${total}</span>
+  </div>`;
+  el.querySelectorAll('button[data-p]').forEach(b=>b.onclick=()=>onGo(parseInt(b.dataset.p)));
+  const prev=el.querySelector('button[data-dir="prev"]'); if(prev&&cur>1)prev.onclick=()=>onGo(cur-1);
+  const next=el.querySelector('button[data-dir="next"]'); if(next&&cur<total)next.onclick=()=>onGo(cur+1);
 }
 
-function _closeAllPanels(){
-  // Tutup dialog mobile
-  const dlg=document.getElementById('_mDlg');
-  if(dlg&&dlg.open)dlg.close();
-  // Tutup desktop dropdowns
-  document.querySelectorAll('.ov-dd-panel.open').forEach(p=>{
-    p.classList.remove('open');
-    if(p.dataset.origStyle!==undefined)p.setAttribute('style',p.dataset.origStyle);
-    else p.removeAttribute('style');
-  });
+function _ddStars(ratio){
+  if(ratio===0||ratio<0.02)return 5;
+  if(ratio<0.05)return 4;
+  if(ratio<0.10)return 3;
+  if(ratio<0.20)return 2;
+  return 1;
 }
 
-document.addEventListener('click',e=>{
-  if(!e.target.closest('.ov-dd-wrap')&&!e.target.closest('.ov-dd-panel'))_closeAllPanels();
-},true);
-window.addEventListener('scroll',_closeAllPanels,{passive:true});
-  const panel = document.getElementById(id);
-  if (!panel) return;
-
-  // Simpan inline-style asli sekali saja
-  if (panel.dataset.origStyle === undefined)
-    panel.dataset.origStyle = panel.getAttribute('style') || '';
-
-
-function _closeAllPanels() {
-  document.querySelectorAll('.ov-dd-panel.open').forEach(p => {
-    p.classList.remove('open');
-
-    // Hapus header mobile jika ada
-    const hdr = p.querySelector('._ddHdr');
-    if (hdr) hdr.remove();
-
-    // Restore inner scroll limits
-    p.querySelectorAll('.ov-dd-scroll').forEach(s => {
-      if (s._mobileMaxH !== undefined) { s.style.maxHeight = s._mobileMaxH; delete s._mobileMaxH; }
-      if (s._mobileOvY !== undefined)  { s.style.overflowY = s._mobileOvY;  delete s._mobileOvY; }
-    });
-
-    // Kembalikan ke posisi DOM asli (teleport balik)
-    if (p._origParent) {
-      p._origParent.insertBefore(p, p._origNext || null);
-      delete p._origParent;
-      delete p._origNext;
-    }
-
-    // Restore style asli
-    if (p.dataset.origStyle !== undefined) p.setAttribute('style', p.dataset.origStyle);
-    else p.removeAttribute('style');
-  });
-
-  // Sembunyikan backdrop
-  const bg = document.getElementById('_ddBg');
-  if (bg) bg.style.display = 'none';
-
-  // Pulihkan scroll body
-  document.body.style.overflow = '';
+function _ddStarHtml(stars,row){
+  const starColors=['#f43f5e','#f59e0b','#f59e0b','#10b981','#10b981'];
+  const filled='★'.repeat(stars)+'☆'.repeat(5-stars);
+  const color=starColors[stars-1]||'#94a3b8';
+  const pct=(row.ratio*100).toFixed(1);
+  const tip=`${row.branch}\nDD: ${row.ddCount}  |  Issue: ${row.issueCount}\nRasio: ${pct}%`;
+  return `<span class="star-tip" data-tip="${tip}" style="color:${color};font-size:1rem;letter-spacing:1px">${filled}</span>`;
 }
 
-// Close dropdowns on outside click/tap
-document.addEventListener('click',e=>{
-  if(!e.target.closest('.ov-dd-wrap')&&!e.target.closest('.ov-dd-panel'))_closeAllPanels();
-},true);
-window.addEventListener('scroll',_closeAllPanels,{passive:true});
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => { loadData(); });
