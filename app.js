@@ -9,6 +9,20 @@
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1712613541&single=true&output=csv';
 const TAG_CSV_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1035358319&single=true&output=csv';
 const MASTER_CSV_URL= 'https://willissmmf.github.io/SP_Dashboard/Master.csv';
+    // Master.csv: same-origin fetch + simple parser (no CORS proxy, avoid hanging)
+    const masterFetch=fetch(MASTER_CSV_URL+`?t=${Date.now()}`)
+      .then(r=>r.ok?r.text():'').then(text=>{
+        if(!text.trim())return[];
+        const rows=text.split('\n').filter(r=>r.trim());
+        if(rows.length<2)return[];
+        const headers=rows[0].split(',').map(h=>h.replace(/^"|"$/g,'').trim());
+        return rows.slice(1).map(row=>{
+          const vals=[];let cur='',inQ=false;
+          for(const ch of row){if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){vals.push(cur);cur='';}else cur+=ch;}
+          vals.push(cur);
+          const obj={};headers.forEach((h,i)=>{obj[h]=(vals[i]||'').replace(/^"|"$/g,'').trim();});return obj;
+        });
+      }).catch(()=>[]);
 
 const DD_CSV_URL    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=408991878&single=true&output=csv';
 
@@ -103,7 +117,8 @@ const PAGE_SIZE=20;
 let sortCol='Date Submitted', sortDir='desc';
 let tableFilter={search:'',status:'',rootCause:''};
 let tagTableSortField='total', tagTableSortDir='desc';
-let filterState = { months: [], branches: [], gel: [] };
+// Global filter state (multi-month, branch)
+const filterState={ months:[], branches:[] };
 
 // ===== DOM REFERENCES =====
 const loadingOverlay   = document.getElementById('loadingOverlay');
@@ -140,8 +155,8 @@ navItems.forEach(item => {
   });
 });
 
-const SECTION_ICONS = { overview:'📊', tickets:'🎫', sla:'⏱️', branch:'🗺️', tags:'🏷️', drawdown:'💰', map:'🌍' };
-const SECTION_TITLES = { overview:'Overview', tickets:'Daftar Tiket', sla:'Analisis SLA', branch:'Analisis Cabang', tags:'Analisis Tag', drawdown:'Analisis Drawdown', map:'Peta Cabang (Experiment)' };
+const SECTION_ICONS = { overview:'📊', simfast:'🚀', tickets:'🎫', sla:'⏱️', branch:'🗺️', tags:'🏷️', drawdown:'💰', map:'🌍' };
+const SECTION_TITLES = { overview:'Overview', simfast:'Overview SimFast', tickets:'Daftar Tiket', sla:'Analisis SLA', branch:'Analisis Cabang', tags:'Analisis Tag', drawdown:'Analisis Drawdown', map:'Peta Cabang (Experiment)' };
 
 function navigateTo(section, statusFilter) {
   navItems.forEach(n => n.classList.remove('active'));
@@ -241,7 +256,7 @@ function getExportData() {
 }
 
 // ===== DATA LOADING =====
-// ===== MASTER SHEET =====
+async // ===== MASTER SHEET =====
 let masterData=[];
 const masterBranchMap=new Map(); // canonBranch → {gel,implementDate,wilayah,hasSimfast}
 let filteredSFData=[];
@@ -272,6 +287,20 @@ async function loadData(){
   showLoading(true);
   refreshBtn.classList.add('spinning');
   try{
+    // Master.csv: same-origin fetch + simple parser (no CORS proxy, avoid hanging)
+    const masterFetch=fetch(MASTER_CSV_URL+`?t=${Date.now()}`)
+      .then(r=>r.ok?r.text():'').then(text=>{
+        if(!text.trim())return[];
+        const rows=text.split('\n').filter(r=>r.trim());
+        if(rows.length<2)return[];
+        const headers=rows[0].split(',').map(h=>h.replace(/^"|"$/g,'').trim());
+        return rows.slice(1).map(row=>{
+          const vals=[];let cur='',inQ=false;
+          for(const ch of row){if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){vals.push(cur);cur='';}else cur+=ch;}
+          vals.push(cur);
+          const obj={};headers.forEach((h,i)=>{obj[h]=(vals[i]||'').replace(/^"|"$/g,'').trim();});return obj;
+        });
+      }).catch(()=>[]);
     const [main,tags,dd,master]=await Promise.all([
       parseCSV(SHEET_CSV_URL,'Data_Source'),parseCSV(TAG_CSV_URL,'Helper_Tag'),
       parseCSV(DD_CSV_URL,'DD_SimFast'),masterFetch]);
@@ -1913,13 +1942,7 @@ window.addEventListener('scroll',_closeAllPanels,{passive:true});
 
 
 // Close dropdowns on outside click/tap
-document.addEventListener('click',e=>{
-  if(!e.target.closest('.ov-dd-wrap')&&!e.target.closest('.ov-dd-panel'))_closeAllPanels();
-},true);
-window.addEventListener('scroll',_closeAllPanels,{passive:true});
 
-// ===== INIT =====
-window.addEventListener('DOMContentLoaded', () => { loadData(); });
 
 function _sfCountActiveBranches(){
   // Cutoff = akhir periode bulan terpilih
@@ -2356,3 +2379,5 @@ function _ddStarHtml(stars,row){
 }
 
 
+// ===== INIT =====
+window.addEventListener('DOMContentLoaded', () => { loadData(); });
