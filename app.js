@@ -257,7 +257,7 @@ function getExportData() {
 }
 
 // ===== DATA LOADING =====
-async // ===== MASTER SHEET =====
+// ===== MASTER SHEET =====
 let masterData=[];
 const masterBranchMap=new Map(); // canonBranch → {gel,implementDate,wilayah,hasSimfast}
 let filteredSFData=[];
@@ -1883,19 +1883,6 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('.ov-dd-wrap')&&!e.target.closest('.ov-dd-panel'))_closeAllPanels();
 },true);
 window.addEventListener('scroll',_closeAllPanels,{passive:true});
-  const panel = document.getElementById(id);
-  if (!panel) return;
-
-  // Simpan inline-style asli sekali saja
-  if (panel.dataset.origStyle === undefined)
-    panel.dataset.origStyle = panel.getAttribute('style') || '';
-
-
-
-
-// Close dropdowns on outside click/tap
-
-
 function _sfCountActiveBranches(){
   // Cutoff = akhir periode bulan terpilih
   const months=filterState.months;
