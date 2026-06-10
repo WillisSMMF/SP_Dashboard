@@ -119,6 +119,7 @@ let tableFilter={search:'',status:'',rootCause:''};
 let tagTableSortField='total', tagTableSortDir='desc';
 // Global filter state (multi-month, branch)
 const filterState={ months:[], branches:[] };
+let filterState_gels=[]; // [] = semua gel
 
 // ===== DOM REFERENCES =====
 const loadingOverlay   = document.getElementById('loadingOverlay');
@@ -1819,55 +1820,6 @@ function filterBranchDropdown(val){
   const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
   _buildBranchChecklist(allBranches, val);
 }
-
-// ── GEL FILTER ────────────────────────────────────────────────────────
-let filterState_gels = []; // [] = semua gel
-
-function _syncGelToBranch(){
-  const gelSel=filterGel(),brSel=filterBranch();
-  if(!gelSel||!brSel)return;
-  const selGels=Array.from(gelSel.options).filter(o=>o.selected&&!o.hidden).map(o=>o.value);
-  const allSel=selGels.length===0||selGels.length===gelSel.options.length;
-  if(allSel){Array.from(brSel.options).forEach(o=>o.selected=true);return;}
-  const gelCanons=new Set([...masterBranchMap.values()]
-    .filter(m=>selGels.includes(String(m.gel))&&m.hasSimfast)
-    .map(m=>canonBranch(m.branch)));
-  Array.from(brSel.options).forEach(o=>o.selected=gelCanons.has(canonBranch(o.value)));
-}
-
-function _populateBranchSelect(){
-  const sel=filterBranch();if(!sel)return;
-  const branches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
-  const prevSelected=Array.from(sel.options).filter(o=>o.selected).map(o=>o.value);
-  sel.innerHTML=branches.map(b=>`<option value="${b}">${b}</option>`).join('');
-  if(prevSelected.length&&prevSelected.length<branches.length){
-    Array.from(sel.options).forEach(o=>o.selected=prevSelected.includes(o.value));
-  } else {
-    Array.from(sel.options).forEach(o=>o.selected=true); // default: semua
-  }
-}
-
-// Populate gel native select
-
-function _populateGelSelect(){
-  const sel=filterGel();if(!sel)return;
-  const gels=[...new Set([...masterBranchMap.values()]
-    .filter(m=>m.hasSimfast&&m.gel!=='').map(m=>String(m.gel)))].sort((a,b)=>+a-+b);
-  sel.innerHTML=gels.length
-    ?gels.map(g=>`<option value="${g}">Gel ${g}</option>`).join('')
-    :'<option disabled value="">Master belum dimuat</option>';
-  Array.from(sel.options).forEach(o=>o.selected=true); // default: semua
-}
-
-// Branch search — hides options that don't match query
-
-function filterBranchOptions(val){
-  const sel=filterBranch();if(!sel)return;
-  const q=val.toLowerCase();
-  Array.from(sel.options).forEach(o=>{o.hidden=q?!o.value.toLowerCase().includes(q):false;});
-}
-
-// Gel → auto-select matching branches in filterBranch select
 
 function toggleDrop(id){
   const panel=document.getElementById(id);
