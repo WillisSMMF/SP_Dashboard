@@ -1997,6 +1997,16 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('.ov-dd-wrap')&&!e.target.closest('.ov-dd-panel'))_closeAllPanels();
 },true);
 window.addEventListener('scroll',_closeAllPanels,{passive:true});
+
+// ===== SIMFAST OV: GLOBAL STATE & CONSTANTS =====
+const SF_RC = ['People','Process','System'];
+const SF_RC_COLORS = { People:'#f43f5e', Process:'#f59e0b', System:'#6366f1' };
+const SF_RC_LIGHT  = { People:'#f43f5e33', Process:'#f59e0b33', System:'#6366f133' };
+let _sfTrendRC='All';
+let _sfDetailMonthFilter=null;
+let _sfDetailRCFilter=null;
+let _sfClickedCat=null;
+
 function _sfCountActiveBranches(){
   // Cutoff = akhir periode bulan terpilih
   const months=filterState.months;
