@@ -2241,9 +2241,23 @@ function _renderSfDetailTable(){
     return(parseIssueDate(a['Date Submitted'])||0)-(parseIssueDate(b['Date Submitted'])||0);
   });
 
-  // Label: Semua Produk SimFast + Semua Bulan (Gel SimFast terisi) + Root Cause aktif
+  // Label: Bulan aktif (slicer global / klik chart) + Root Cause aktif
   const rcLabel=_sfTrendRC==='All'?'Semua Root Cause':`Root Cause: ${_sfTrendRC}`;
-  const monthLabel=_sfDetailMonthFilter?_sfDetailMonthFilter:'Semua Bulan SimFast';
+  let monthLabel;
+  if(_sfDetailMonthFilter){
+    monthLabel=_sfDetailMonthFilter; // bulan dari klik bar chart
+  } else {
+    // Total bulan SimFast yang TERSEDIA (tanpa filter bulan), agar perbandingan akurat
+    const sfAllMonths=_sfGetMonthKeys(allData.filter(r=>r._sfActive));
+    const sel=filterState.months;
+    if(sel.length===0||sel.length>=sfAllMonths.length){
+      monthLabel=`Semua Bulan SimFast (${sfAllMonths.length} bulan)`;
+    } else if(sel.length===1){
+      monthLabel=sel[0];
+    } else {
+      monthLabel=`${sel.length} Bulan Dipilih`;
+    }
+  }
   if(title)title.textContent=`📋 Detail Tiket SimFast — ${monthLabel} · ${rcLabel} (${rows.length} tiket)`;
 
   tbody.innerHTML=rows.map((r,i)=>{
@@ -2345,11 +2359,11 @@ function _renderSfCatRCMonthTable(data){
   if(!thead||!tbody)return;
 
   thead.innerHTML=`<tr>
-    <th rowspan="2" style="min-width:150px;vertical-align:middle;border-right:1px solid rgba(255,255,255,0.08)">Kategori</th>
-    <th rowspan="2" style="min-width:70px;vertical-align:middle">Root Cause</th>
+    <th style="min-width:150px;border-right:1px solid rgba(255,255,255,0.08)">Kategori</th>
+    <th style="min-width:70px">Root Cause</th>
     ${keys.map(k=>`<th style="text-align:right;min-width:50px;font-size:0.76rem;white-space:nowrap">${_sfShortMonth(k)}</th>`).join('')}
-    <th rowspan="2" style="text-align:right;min-width:54px;vertical-align:middle;font-weight:800;border-left:1px solid rgba(255,255,255,0.08)">Total</th>
-  </tr><tr>${keys.map(()=>'<th></th>').join('')}</tr>`;
+    <th style="text-align:right;min-width:54px;font-weight:800;border-left:1px solid rgba(255,255,255,0.08)">Total</th>
+  </tr>`;
 
   const rows=[];
   cats.forEach(cat=>{
