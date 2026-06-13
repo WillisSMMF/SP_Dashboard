@@ -100,6 +100,8 @@ const PALETTE = {
   emerald:'#10b981', amber:'#f59e0b', rose:'#f43f5e',
   sky:'#38bdf8', lime:'#a3e635', orange:'#fb923c', pink:'#f472b6',
 };
+// Warna konsisten untuk Root Cause di SEMUA section: People=Merah, Process=Kuning, System=Ungu
+const RC_COLORS = { People: PALETTE.rose, Process: PALETTE.amber, System: PALETTE.secondary };
 const MULTI = [
   '#6366f1','#22d3ee','#10b981','#f59e0b','#f43f5e',
   '#8b5cf6','#38bdf8','#a3e635','#fb923c','#f472b6',
@@ -746,7 +748,7 @@ function renderBranch(){
   });
 
   // ── 2. Root Cause per Cabang (TOP 10, replaces branchStatus position) ──
-  const rcs=['System','People','Process'],rcColors=[PALETTE.primary,PALETTE.amber,PALETTE.emerald];
+  const rcs=['People','Process','System'],rcColors=[RC_COLORS.People,RC_COLORS.Process,RC_COLORS.System];
   destroyChart('branchRc');
   const ctxRc=document.getElementById('branchRcChart').getContext('2d');
   charts.branchRc=new Chart(ctxRc,{
@@ -1315,8 +1317,24 @@ function renderDDMonthChart(){
   filteredDDData.forEach(r=>{const d=parseDDDate(r['Submit Date']);if(!d)return;if(!periodMap[d.sortKey])periodMap[d.sortKey]={label:d.label,sortKey:d.sortKey};});
   const periods=Object.values(periodMap).sort((a,b)=>a.sortKey.localeCompare(b.sortKey));
   const labels=periods.map(p=>p.label);
-  const ddByPeriod=periods.map(p=>filteredDDData.filter(r=>{const d=parseDDDate(r['Submit Date']);return d&&d.sortKey===p.sortKey&&r.Status==='MUF-Drawdown';}).length);
-  const totalByPeriod=periods.map(p=>filteredDDData.filter(r=>{const d=parseDDDate(r['Submit Date']);return d&&d.sortKey===p.sortKey;}).length);
+  // Total Aplikasi = jumlah Order Number UNIK per periode (semua status)
+  // MUF-Drawdown   = jumlah Order Number UNIK per periode dengan Status='MUF-Drawdown'
+  const totalByPeriod=periods.map(p=>{
+    const orders=new Set();
+    filteredDDData.forEach(r=>{
+      const d=parseDDDate(r['Submit Date']);
+      if(d&&d.sortKey===p.sortKey&&r['Order Number'])orders.add(r['Order Number']);
+    });
+    return orders.size;
+  });
+  const ddByPeriod=periods.map(p=>{
+    const orders=new Set();
+    filteredDDData.forEach(r=>{
+      const d=parseDDDate(r['Submit Date']);
+      if(d&&d.sortKey===p.sortKey&&r.Status==='MUF-Drawdown'&&r['Order Number'])orders.add(r['Order Number']);
+    });
+    return orders.size;
+  });
   destroyChart('ddMonth');
   charts.ddMonth=new Chart(document.getElementById('ddMonthChart').getContext('2d'),{type:'bar',
     data:{labels,datasets:[
@@ -1324,7 +1342,7 @@ function renderDDMonthChart(){
       {label:'MUF-Drawdown',data:ddByPeriod,type:'line',borderColor:PALETTE.emerald,backgroundColor:PALETTE.emerald+'30',tension:0.4,fill:true,pointRadius:5,borderWidth:2.5,order:1}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'top'},tooltip:{callbacks:{afterBody(items){const idx=items[0].dataIndex;const dd=ddByPeriod[idx];const tot=totalByPeriod[idx];const ratio=tot>0?(dd/tot*100).toFixed(1):'0';return[`Rasio DD: ${ratio}% (${dd}/${tot})`];}}}},
+      plugins:{legend:{position:'top'},tooltip:{callbacks:{afterBody(items){const idx=items[0].dataIndex;const dd=ddByPeriod[idx];const tot=totalByPeriod[idx];const ratio=tot>0?(dd/tot*100).toFixed(1):'0';return[`Rasio DD: ${ratio}% (${dd}/${tot} aplikasi unik)`];}}}},
       scales:{x:{grid:{display:false}},y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}}});
 }
 function renderDDStatusChart(){
@@ -1981,8 +1999,25 @@ function toggleDrop(id){
     },{once:true});
     dlg.showModal();
   }else{
-    // DESKTOP: absolute dropdown seperti biasa
+    // DESKTOP: hitung posisi via JS (position:fixed) — menghindari masalah
+    // containing-block dari position:absolute di dalam topbar sticky.
+    const btn=panel.parentElement.querySelector('.ov-dd-btn')||panel.previousElementSibling;
     panel.classList.add('open');
+    const panelW=parseInt(panel.style.width)||panel.offsetWidth||240;
+    let top=6, left=8;
+    if(btn){
+      const rect=btn.getBoundingClientRect();
+      top=rect.bottom+6;
+      left=rect.right-panelW; // align kanan tombol dengan kanan panel
+      if(left<8)left=8;
+      const maxLeft=window.innerWidth-panelW-8;
+      if(left>maxLeft)left=maxLeft;
+    }
+    panel.style.position='fixed';
+    panel.style.top=top+'px';
+    panel.style.left=left+'px';
+    panel.style.right='auto';
+    panel.style.margin='0';
   }
 }
 
@@ -2005,8 +2040,8 @@ window.addEventListener('scroll',_closeAllPanels,{passive:true});
 
 // ===== SIMFAST OV: GLOBAL STATE & CONSTANTS =====
 const SF_RC = ['People','Process','System'];
-const SF_RC_COLORS = { People:'#f43f5e', Process:'#f59e0b', System:'#6366f1' };
-const SF_RC_LIGHT  = { People:'#f43f5e33', Process:'#f59e0b33', System:'#6366f133' };
+const SF_RC_COLORS = { People: RC_COLORS.People, Process: RC_COLORS.Process, System: RC_COLORS.System };
+const SF_RC_LIGHT  = { People: RC_COLORS.People+'33', Process: RC_COLORS.Process+'33', System: RC_COLORS.System+'33' };
 let _sfTrendRC='All';
 let _sfDetailMonthFilter=null;
 let _sfClickedCat=null;
