@@ -184,7 +184,6 @@ function populateFilters(){
   const monthKeySet=new Set();
   allData.forEach(r=>{
     const k=getRowMonthKey(r);
-    // Hanya masukkan key yang punya format "YYYY MonthName" (ada tahunnya)
     if(k&&/^\d{4}\s/.test(k))monthKeySet.add(k);
   });
   const allMonthKeys=[...monthKeySet].sort((a,b)=>{
@@ -195,6 +194,19 @@ function populateFilters(){
   const allBranches=[...new Set(allData.map(r=>branchField(r)).filter(Boolean))].sort();
   _buildBranchChecklist(allBranches,'');
   _buildGelFilter();
+
+  // Root Cause dropdown: People / Process / System + Lainnya (semua selain ketiganya + kosong)
+  const MAIN_RC=['People','Process','System'];
+  const allRC=[...new Set(allData.map(r=>r['Root Cause']||'').filter(v=>v))];
+  const lainnyaCount=allRC.filter(rc=>!MAIN_RC.includes(rc)).length;
+  const emptyCount=allData.filter(r=>!r['Root Cause']).length;
+  const lainnyaLabel=`Lainnya (${lainnyaCount} jenis${emptyCount>0?', termasuk kosong':''})`;
+  if(tableRootCauseEl){
+    tableRootCauseEl.innerHTML=
+      `<option value="">Semua Root Cause</option>`+
+      MAIN_RC.map(rc=>`<option value="${rc}">${rc}</option>`).join('')+
+      `<option value="__lainnya__">${lainnyaLabel}</option>`;
+  }
 }
 
 // ===== GLOBAL FILTERS =====
@@ -252,7 +264,10 @@ function getExportData() {
   if(tableFilter.search) data=data.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(tableFilter.search)));
   if(tableFilter.status==='__open__') data=data.filter(r=>!['resolved','closed'].includes((r.Status||'').toLowerCase()));
   else if(tableFilter.status) data=data.filter(r=>(r.Status||'').toLowerCase()===tableFilter.status.toLowerCase());
-  if(tableFilter.rootCause) data=data.filter(r=>r['Root Cause']===tableFilter.rootCause);
+  if(tableFilter.rootCause){
+    if(tableFilter.rootCause==='__lainnya__'){const MRC=['People','Process','System'];data=data.filter(r=>!r['Root Cause']||!MRC.includes(r['Root Cause']));}
+    else data=data.filter(r=>r['Root Cause']===tableFilter.rootCause);
+  }
   return data.map(r=>({
     'ID':r.Id||'','Date Submitted':(r['Date Submitted']||'').split(' ')[0]||'',
     'Summary':r.Summary||'','Category':r.Category||'',
@@ -547,7 +562,14 @@ function renderTicketTable(){
   if(tableFilter.search)data=data.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(tableFilter.search)));
   if(tableFilter.status==='__open__')data=data.filter(r=>!['resolved','closed'].includes((r.Status||'').toLowerCase()));
   else if(tableFilter.status)data=data.filter(r=>(r.Status||'').toLowerCase()===tableFilter.status.toLowerCase());
-  if(tableFilter.rootCause)data=data.filter(r=>r['Root Cause']===tableFilter.rootCause);
+  if(tableFilter.rootCause){
+    if(tableFilter.rootCause==='__lainnya__'){
+      const MAIN_RC=['People','Process','System'];
+      data=data.filter(r=>!r['Root Cause']||!MAIN_RC.includes(r['Root Cause']));
+    } else {
+      data=data.filter(r=>r['Root Cause']===tableFilter.rootCause);
+    }
+  }
   data.sort((a,b)=>{
     let av=a[sortCol]||'',bv=b[sortCol]||'';
     if(sortCol==='Date Submitted'||sortCol==='Id'){av=parseFloat(av)||av;bv=parseFloat(bv)||bv;}
@@ -562,11 +584,20 @@ function renderTicketTable(){
     feedback:`<span class="badge badge-pending">feedback</span>`,
     closed:`<span class="badge" style="background:rgba(148,163,184,0.15);color:#94a3b8">closed</span>`,
   };
-  tableBodyEl.innerHTML=page.map(r=>{
+  tableBodyEl.innerHTML=page.map((r,i)=>{
     const sla=parseFloat(r.SLA);
     const slaClass=isNaN(sla)?'':sla<=1?'sla-good':sla<=3?'sla-warn':'sla-bad';
+    const slaStr=isNaN(sla)?'-':sla===1?'1 day':`${sla} days`;
     const statusBadge=statusMap[(r.Status||'').toLowerCase()]||`<span class="badge">${r.Status||'-'}</span>`;
+    // Gel column
+    const prod=r['Product Source']||'';
+    let gelHtml='<td style="text-align:center;color:#475569;font-size:0.76rem">—</td>';
+    if(prod==='SimFast'||prod==='Simascore'){
+      const gel=r._sfGel!==undefined?r._sfGel:(getMasterInfo(branchField(r))?.gel??'?');
+      gelHtml=`<td style="text-align:center"><span style="background:${PALETTE.primary}18;color:${PALETTE.primary};padding:2px 8px;border-radius:10px;font-size:0.74rem;font-weight:700;white-space:nowrap">Gel ${gel}</span></td>`;
+    }
     return `<tr>
+      <td style="text-align:center;color:#64748b;font-size:0.75rem">${(currentPage-1)*PAGE_SIZE+i+1}</td>
       <td><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary}">#${r.Id}</a></td>
       <td style="white-space:nowrap;font-size:0.78rem">${(r['Date Submitted']||'').split(' ')[0]||'-'}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Summary||''}">${r.Summary||'-'}</td>
@@ -574,8 +605,9 @@ function renderTicketTable(){
       <td><span class="badge" style="background:${PALETTE.primary}22;color:${PALETTE.primary}">${r['Product Source']||'-'}</span></td>
       <td>${statusBadge}</td>
       <td style="font-size:0.78rem">${r['Root Cause']||'-'}</td>
-      <td><span class="${slaClass}">${isNaN(sla)?'-':sla+' hr'}</span></td>
+      <td><span class="${slaClass}">${slaStr}</span></td>
       <td style="font-size:0.78rem">${r['Branch Name']||r.Branch||'-'}</td>
+      ${gelHtml}
     </tr>`;
   }).join('');
   renderPagination(data.length);
