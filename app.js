@@ -2252,33 +2252,53 @@ window._sfSetTrendRC=function(rc){
 
 function _renderSfMonthBreakdown(data){
   const el=document.getElementById('sfMonthBreakdownBody');if(!el)return;
-  // Ikuti Root Cause yang dipilih di chart Tren (All/People/Process/System)
+  // Ikuti Root Cause yang dipilih di chart Tren
   const rcData=_sfTrendRC==='All'?data:data.filter(r=>r['Root Cause']===_sfTrendRC);
-  const keys=_sfGetMonthKeys(data); // tetap pakai semua bulan SimFast sbg baris
+  const keys=_sfGetMonthKeys(data);
   if(!keys.length){el.innerHTML='<tr><td colspan="5" style="text-align:center;color:#64748b;padding:10px">Tidak ada data</td></tr>';return;}
   const totals=keys.map(k=>rcData.filter(r=>getRowMonthKey(r)===k).length);
-  const mean=totals.reduce((a,b)=>a+b,0)/totals.length;
+
   el.innerHTML=keys.map((k,i)=>{
     const count=totals[i];
     const prev=i>0?totals[i-1]:null;
-    let momHtml='<span style="color:#475569">—</span>';
-    if(prev!==null&&prev>0){
-      const pct=((count-prev)/prev*100).toFixed(1);
-      const sign=count>prev?'+':'';
-      const c=count>prev?'#f43f5e':count<prev?'#10b981':'#94a3b8';
-      momHtml=`<span style="color:${c};font-weight:600;white-space:nowrap">${sign}${pct}%</span>`;
+
+    // Avg = rata-rata kumulatif bulan-bulan SEBELUMNYA (bukan termasuk bulan ini)
+    // Bulan pertama: belum ada data sebelumnya → tampilkan "—"
+    let avgHtml='<span style="color:#475569">—</span>';
+    if(i>0){
+      const prevMonths=totals.slice(0,i);
+      const rollingAvg=prevMonths.reduce((a,b)=>a+b,0)/prevMonths.length;
+      const avgColor=count>rollingAvg?'#f43f5e':count<rollingAvg?'#10b981':'#94a3b8';
+      avgHtml=`<span style="color:${avgColor};font-weight:600" title="Avg ${i} bulan sebelumnya: ${rollingAvg.toFixed(1)}">${rollingAvg.toFixed(1)}</span>`;
     }
+
+    // MoM = % perubahan vs bulan sebelumnya
+    let momHtml='<span style="color:#475569">—</span>';
+    if(prev!==null){
+      if(prev===0&&count===0){
+        momHtml='<span style="color:#94a3b8">0%</span>';
+      } else if(prev===0){
+        momHtml=`<span style="color:#f43f5e;font-weight:600">Baru</span>`;
+      } else {
+        const pct=((count-prev)/prev*100).toFixed(1);
+        const sign=count>prev?'+':'';
+        const c=count>prev?'#f43f5e':count<prev?'#10b981':'#94a3b8';
+        momHtml=`<span style="color:${c};font-weight:600;white-space:nowrap">${sign}${pct}%</span>`;
+      }
+    }
+
+    // Cabang aktif s.d akhir bulan ini
     const parts=k.split(' ');
     const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
     const monthEnd=yr&&mo>=0?new Date(yr,mo+1,0):null;
     const activeBr=monthEnd?[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=monthEnd).length:'—';
-    const avgColor=count>mean?'#f43f5e':'#10b981';
+
     return`<tr>
       <td style="padding:5px 8px;white-space:nowrap;font-size:0.78rem">${k}</td>
       <td style="text-align:right;font-weight:700;color:#f1f5f9;padding:5px 6px">${count}</td>
-      <td style="text-align:right;font-size:0.77rem;color:${avgColor};padding:5px 6px" title="Mean semua bulan">${mean.toFixed(1)}</td>
+      <td style="text-align:right;padding:5px 6px">${avgHtml}</td>
       <td style="text-align:right;padding:5px 8px">${momHtml}</td>
-      <td style="text-align:right;font-size:0.77rem;color:#94a3b8;padding:5px 8px">${activeBr}</td>
+      <td style="text-align:right;font-size:0.77rem;color:#94a3b8;padding:5px 8px" title="Cabang SimFast aktif s.d ${k}">${activeBr}</td>
     </tr>`;
   }).join('');
 }
