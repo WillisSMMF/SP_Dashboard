@@ -62,24 +62,24 @@
 <body>
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="logo">
+      <div class="logo sidebar-hotzone" id="sidebarHotzone" onclick="toggleSidebar()" title="Klik untuk minimize/tampilkan sidebar">
         <div class="logo-icon">🐞</div>
         <div class="logo-text">
           <span class="logo-title">Product Support</span>
           <span class="logo-sub">Dashboard</span>
         </div>
       </div>
-      <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">‹</button>
+      <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="Toggle Sidebar">‹</button>
     </div>
     <nav class="sidebar-nav">
-      <a href="#overview" class="nav-item active" data-section="overview" id="nav-overview"><span class="nav-icon">📊</span><span class="nav-label">Overview</span></a>
-      <a href="#simfast" class="nav-item" data-section="simfast" id="nav-simfast"><span class="nav-icon">🚀</span><span class="nav-label">SimFast OV</span></a>
-      <a href="#sla" class="nav-item" data-section="sla" id="nav-sla"><span class="nav-icon">⏱️</span><span class="nav-label">SLA</span></a>
-      <a href="#branch" class="nav-item" data-section="branch" id="nav-branch"><span class="nav-icon">🗺️</span><span class="nav-label">Cabang</span></a>
-      <a href="#tags" class="nav-item" data-section="tags" id="nav-tags"><span class="nav-icon">🏷️</span><span class="nav-label">Tag</span></a>
-      <a href="#drawdown" class="nav-item" data-section="drawdown" id="nav-drawdown"><span class="nav-icon">💰</span><span class="nav-label">Drawdown</span></a>
-      <a href="#tickets" class="nav-item" data-section="tickets" id="nav-tickets"><span class="nav-icon">🎫</span><span class="nav-label">Tiket</span></a>
-      <a href="#map" class="nav-item" data-section="map" id="nav-map"><span class="nav-icon">🌍</span><span class="nav-label">Peta (Exp.)</span></a>
+      <a href="#overview" class="nav-item active" data-section="overview" id="nav-overview" data-tooltip="Overview"><span class="nav-icon">📊</span><span class="nav-label">Overview</span></a>
+      <a href="#simfast" class="nav-item" data-section="simfast" id="nav-simfast" data-tooltip="SimFast OV"><span class="nav-icon">🚀</span><span class="nav-label">SimFast OV</span></a>
+      <a href="#sla" class="nav-item" data-section="sla" id="nav-sla" data-tooltip="SLA"><span class="nav-icon">⏱️</span><span class="nav-label">SLA</span></a>
+      <a href="#branch" class="nav-item" data-section="branch" id="nav-branch" data-tooltip="Cabang"><span class="nav-icon">🗺️</span><span class="nav-label">Cabang</span></a>
+      <a href="#tags" class="nav-item" data-section="tags" id="nav-tags" data-tooltip="Tag"><span class="nav-icon">🏷️</span><span class="nav-label">Tag</span></a>
+      <a href="#drawdown" class="nav-item" data-section="drawdown" id="nav-drawdown" data-tooltip="Drawdown"><span class="nav-icon">💰</span><span class="nav-label">Drawdown</span></a>
+      <a href="#tickets" class="nav-item" data-section="tickets" id="nav-tickets" data-tooltip="Tiket"><span class="nav-icon">🎫</span><span class="nav-label">Tiket</span></a>
+      <a href="#map" class="nav-item" data-section="map" id="nav-map" data-tooltip="Peta (Exp.)"><span class="nav-icon">🌍</span><span class="nav-label">Peta (Exp.)</span></a>
     </nav>
     <div class="sidebar-footer">
       <div class="data-source">
@@ -123,11 +123,34 @@
           <button class="ov-dd-btn filter-select" onclick="toggleDrop('filterGelPanel')"><span id="filterGelLabel">Semua Gel</span> ▾</button>
           <div class="ov-dd-panel" id="filterGelPanel" style="width:190px;z-index:300"></div>
         </div>
-        <div class="export-group">
-          <span class="export-label">Export:</span>
-          <button class="export-btn" id="exportCSV">📄 CSV</button>
-          <button class="export-btn" id="exportXLSX">📊 XLSX</button>
-          <button class="export-btn" id="exportPDF">📑 PDF</button>
+        <div class="filter-group" id="fgDate" style="position:relative">
+          <label class="filter-label">📅 Tanggal</label>
+          <button class="ov-dd-btn filter-select" onclick="toggleDrop('filterDatePanel')"><span id="filterDateLabel">Semua Tanggal</span> ▾</button>
+          <div class="ov-dd-panel" id="filterDatePanel" style="width:280px;z-index:300;padding:12px 14px">
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label style="font-size:0.75rem;color:#94a3b8;font-weight:600">Dari Tanggal</label>
+                <input type="date" id="filterDateFrom" class="date-input" onchange="applyDateFilter()" />
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label style="font-size:0.75rem;color:#94a3b8;font-weight:600">Hingga Tanggal <span style="color:#475569;font-weight:400">(opsional)</span></label>
+                <input type="date" id="filterDateTo" class="date-input" onchange="applyDateFilter()" />
+              </div>
+              <button onclick="clearDateFilter()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;padding:6px 12px;border-radius:7px;cursor:pointer;font-size:0.78rem;width:100%">✕ Reset Tanggal</button>
+            </div>
+          </div>
+        </div>
+        <div class="filter-group" style="position:relative">
+          <div class="ov-dd-wrap">
+            <button class="ov-dd-btn export-btn" onclick="toggleDrop('exportDropPanel')" style="white-space:nowrap;padding:6px 12px;gap:6px;display:flex;align-items:center">
+              📤 Export ▾
+            </button>
+            <div class="ov-dd-panel" id="exportDropPanel" style="width:160px;z-index:300;padding:6px 0">
+              <button id="exportCSV" onclick="_closeAllPanels()" class="export-drop-item">📄 CSV</button>
+              <button id="exportXLSX" onclick="_closeAllPanels()" class="export-drop-item">📊 XLSX</button>
+              <button id="exportPDF" onclick="_closeAllPanels()" class="export-drop-item">📑 PDF</button>
+            </div>
+          </div>
         </div>
         <button class="refresh-btn" id="refreshBtn"><span class="refresh-icon">↻</span><span>Refresh</span></button>
       </div>

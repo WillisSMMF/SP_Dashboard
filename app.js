@@ -142,10 +142,8 @@ const mobileMenuBtn    = document.getElementById('mobileMenuBtn');
 const currentPageTitle = document.getElementById('currentPageTitle');
 
 // ===== SIDEBAR =====
-sidebarToggleEl.addEventListener('click', () => {
-  sidebarEl.classList.toggle('collapsed');
-  mainEl.classList.toggle('sidebar-collapsed');
-});
+
+
 mobileMenuBtn.addEventListener('click', () => sidebarEl.classList.toggle('mobile-open'));
 
 // ===== NAVIGATION =====
@@ -210,6 +208,59 @@ function populateFilters(){
 }
 
 // ===== GLOBAL FILTERS =====
+// ===== DATE RANGE FILTER =====
+// dateFilter.from = Date object or null, dateFilter.to = Date object or null
+const dateFilter = { from: null, to: null };
+
+function applyDateFilter(){
+  const fromEl = document.getElementById('filterDateFrom');
+  const toEl   = document.getElementById('filterDateTo');
+  const lbl    = document.getElementById('filterDateLabel');
+  dateFilter.from = fromEl&&fromEl.value ? new Date(fromEl.value) : null;
+  dateFilter.to   = toEl&&toEl.value     ? new Date(toEl.value)   : null;
+  // Label
+  if(!dateFilter.from && !dateFilter.to){
+    if(lbl) lbl.textContent = 'Semua Tanggal';
+  } else if(dateFilter.from && !dateFilter.to){
+    if(lbl) lbl.textContent = fromEl.value;
+  } else if(!dateFilter.from && dateFilter.to){
+    if(lbl) lbl.textContent = '– ' + toEl.value;
+  } else {
+    if(lbl) lbl.textContent = fromEl.value + ' – ' + toEl.value;
+  }
+  applyGlobalFilters();
+}
+
+function clearDateFilter(){
+  const fromEl = document.getElementById('filterDateFrom');
+  const toEl   = document.getElementById('filterDateTo');
+  if(fromEl) fromEl.value = '';
+  if(toEl)   toEl.value   = '';
+  dateFilter.from = null;
+  dateFilter.to   = null;
+  const lbl = document.getElementById('filterDateLabel');
+  if(lbl) lbl.textContent = 'Semua Tanggal';
+  applyGlobalFilters();
+}
+
+function _dateInRange(date) {
+  if(!date) return true; // no date → include
+  if(dateFilter.from && dateFilter.to){
+    const to = new Date(dateFilter.to); to.setHours(23,59,59,999);
+    return date >= dateFilter.from && date <= to;
+  }
+  if(dateFilter.from && !dateFilter.to){
+    // single date: match that day only
+    const nextDay = new Date(dateFilter.from); nextDay.setDate(nextDay.getDate()+1);
+    return date >= dateFilter.from && date < nextDay;
+  }
+  if(!dateFilter.from && dateFilter.to){
+    const to = new Date(dateFilter.to); to.setHours(23,59,59,999);
+    return date <= to;
+  }
+  return true;
+}
+
 function applyGlobalFilters(){
   const selMonths=filterState.months;
   const product=filterProduct.value;
@@ -218,6 +269,7 @@ function applyGlobalFilters(){
     if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
     if(product&&r['Product Source']!==product)return false;
     if(selBranches.length&&!selBranches.includes(branchField(r)))return false;
+    if(dateFilter.from||dateFilter.to){if(!_dateInRange(parseIssueDate(r['Date Submitted'])))return false;}
     return true;
   });
   filteredTagData=tagData.filter(r=>{
@@ -233,12 +285,14 @@ function applyGlobalFilters(){
   filteredDDData=ddData.filter(r=>{
     if(selMonths.length){const d=parseDDDate(r['Submit Date']);if(!d)return false;const k=d.year?`${d.year} ${d.month}`:d.month;if(!selMonths.includes(k)&&!selMonths.some(s=>s.split(' ').pop()===d.month))return false;}
     if(selBranches.length){const ddCanon=canonBranch(r['Branch Name']||'');if(!selBranches.some(b=>canonBranch(b)===ddCanon))return false;}
+    if(dateFilter.from||dateFilter.to){const d=parseDDDate(r['Submit Date']);if(!d||!_dateInRange(new Date(d.year,['January','February','March','April','May','June','July','August','September','October','November','December'].indexOf(d.month),parseInt(r['Submit Date'])||1)))return false;}
     return true;
   });
   filteredSFData=allData.filter(r=>{
     if(!r._sfActive)return false;
     if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
     if(selBranches.length&&!selBranches.includes(branchField(r)))return false;
+    if(dateFilter.from||dateFilter.to){if(!_dateInRange(parseIssueDate(r['Date Submitted'])))return false;}
     return true;
   });
   currentPage=1;
@@ -1739,10 +1793,21 @@ function getRowMonthKey(r){
 
 
 // ===== SIDEBAR =====
-sidebarToggleEl.addEventListener('click', () => {
+// ===== SIDEBAR COLLAPSE =====
+function toggleSidebar(){
   sidebarEl.classList.toggle('collapsed');
   mainEl.classList.toggle('sidebar-collapsed');
-});
+  const isCollapsed=sidebarEl.classList.contains('collapsed');
+  if(sidebarToggleEl)sidebarToggleEl.textContent=isCollapsed?'›':'‹';
+  try{localStorage.setItem('sidebarCollapsed',isCollapsed?'1':'0');}catch(e){}
+}
+// Restore state on load
+try{if(localStorage.getItem('sidebarCollapsed')==='1'){
+  sidebarEl.classList.add('collapsed');
+  mainEl.classList.add('sidebar-collapsed');
+  if(sidebarToggleEl)sidebarToggleEl.textContent='›';
+}}catch(e){}
+sidebarToggleEl.addEventListener('click',e=>{e.stopPropagation();toggleSidebar();});
 mobileMenuBtn.addEventListener('click', () => sidebarEl.classList.toggle('mobile-open'));
 // ===== LOADING =====
 
