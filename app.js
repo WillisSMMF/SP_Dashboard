@@ -265,15 +265,21 @@ function applyGlobalFilters(){
   const selMonths=filterState.months;
   const product=filterProduct.value;
   const selBranches=filterState.branches;
+  const useDateFilter = !!(dateFilter.from || dateFilter.to);
+
   filteredData=allData.filter(r=>{
-    if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
+    // Date filter takes priority over month filter
+    if(useDateFilter){
+      if(!_dateInRange(parseIssueDate(r['Date Submitted'])))return false;
+    } else {
+      if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
+    }
     if(product&&r['Product Source']!==product)return false;
     if(selBranches.length&&!selBranches.includes(branchField(r)))return false;
-    if(dateFilter.from||dateFilter.to){if(!_dateInRange(parseIssueDate(r['Date Submitted'])))return false;}
     return true;
   });
   filteredTagData=tagData.filter(r=>{
-    if(selMonths.length){
+    if(!useDateFilter&&selMonths.length){
       const yr=getRowYear(r);
       const k=yr?`${yr} ${monthNumToName(r.Month_Number)}`:monthNumToName(r.Month_Number);
       if(!selMonths.includes(k)&&!selMonths.some(s=>s.split(' ').pop()===k))return false;
@@ -283,16 +289,27 @@ function applyGlobalFilters(){
     return true;
   });
   filteredDDData=ddData.filter(r=>{
-    if(selMonths.length){const d=parseDDDate(r['Submit Date']);if(!d)return false;const k=d.year?`${d.year} ${d.month}`:d.month;if(!selMonths.includes(k)&&!selMonths.some(s=>s.split(' ').pop()===d.month))return false;}
+    if(useDateFilter){
+      // Parse DD Submit Date for date range check
+      const d=parseDDDate(r['Submit Date']);
+      if(!d)return false;
+      const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const dt=new Date(d.year,MON.indexOf(d.month),1);
+      if(!_dateInRange(dt))return false;
+    } else {
+      if(selMonths.length){const d=parseDDDate(r['Submit Date']);if(!d)return false;const k=d.year?`${d.year} ${d.month}`:d.month;if(!selMonths.includes(k)&&!selMonths.some(s=>s.split(' ').pop()===d.month))return false;}
+    }
     if(selBranches.length){const ddCanon=canonBranch(r['Branch Name']||'');if(!selBranches.some(b=>canonBranch(b)===ddCanon))return false;}
-    if(dateFilter.from||dateFilter.to){const d=parseDDDate(r['Submit Date']);if(!d||!_dateInRange(new Date(d.year,['January','February','March','April','May','June','July','August','September','October','November','December'].indexOf(d.month),parseInt(r['Submit Date'])||1)))return false;}
     return true;
   });
   filteredSFData=allData.filter(r=>{
     if(!r._sfActive)return false;
-    if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
+    if(useDateFilter){
+      if(!_dateInRange(parseIssueDate(r['Date Submitted'])))return false;
+    } else {
+      if(selMonths.length){const k=getRowMonthKey(r);if(!selMonths.includes(k))return false;}
+    }
     if(selBranches.length&&!selBranches.includes(branchField(r)))return false;
-    if(dateFilter.from||dateFilter.to){if(!_dateInRange(parseIssueDate(r['Date Submitted'])))return false;}
     return true;
   });
   currentPage=1;
@@ -626,8 +643,9 @@ function renderTicketTable(){
   }
   data.sort((a,b)=>{
     let av=a[sortCol]||'',bv=b[sortCol]||'';
-    if(sortCol==='Date Submitted'||sortCol==='Id'){av=parseFloat(av)||av;bv=parseFloat(bv)||bv;}
-    return sortDir==='asc'?(av>bv?1:-1):(av<bv?1:-1);
+    if(sortCol==='_gel'){av=String(a._sfGel??'99');bv=String(b._sfGel??'99');}
+    if(sortCol==='Date Submitted'||sortCol==='Id'||sortCol==='SLA'){av=parseFloat(av)||0;bv=parseFloat(bv)||0;}
+    return sortDir==='asc'?(av>bv?1:av<bv?-1:0):(av<bv?1:av>bv?-1:0);
   });
   tableCountEl.textContent=`${data.length} tiket`;
   const page=data.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE);
@@ -651,16 +669,16 @@ function renderTicketTable(){
       gelHtml=`<td style="text-align:center"><span style="background:${PALETTE.primary}18;color:${PALETTE.primary};padding:2px 8px;border-radius:10px;font-size:0.74rem;font-weight:700;white-space:nowrap">Gel ${gel}</span></td>`;
     }
     return `<tr>
-      <td style="text-align:center;color:#64748b;font-size:0.75rem">${(currentPage-1)*PAGE_SIZE+i+1}</td>
-      <td><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary}">#${r.Id}</a></td>
+      <td style="text-align:center;color:#64748b;font-size:0.75rem;white-space:nowrap">${(currentPage-1)*PAGE_SIZE+i+1}</td>
+      <td style="white-space:nowrap"><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary}">#${r.Id}</a></td>
       <td style="white-space:nowrap;font-size:0.78rem">${(r['Date Submitted']||'').split(' ')[0]||'-'}</td>
-      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.Summary||''}">${r.Summary||'-'}</td>
-      <td style="font-size:0.78rem">${r.Category||'-'}</td>
-      <td><span class="badge" style="background:${PALETTE.primary}22;color:${PALETTE.primary}">${r['Product Source']||'-'}</span></td>
-      <td>${statusBadge}</td>
-      <td style="font-size:0.78rem">${r['Root Cause']||'-'}</td>
-      <td><span class="${slaClass}">${slaStr}</span></td>
-      <td style="font-size:0.78rem">${r['Branch Name']||r.Branch||'-'}</td>
+      <td style="font-size:0.82rem;min-width:200px;white-space:normal;word-break:break-word;line-height:1.4">${r.Summary||'-'}</td>
+      <td style="font-size:0.78rem;white-space:nowrap">${r.Category||'-'}</td>
+      <td style="white-space:nowrap"><span class="badge" style="background:${PALETTE.primary}22;color:${PALETTE.primary}">${r['Product Source']||'-'}</span></td>
+      <td style="white-space:nowrap">${statusBadge}</td>
+      <td style="font-size:0.78rem;white-space:nowrap">${r['Root Cause']||'-'}</td>
+      <td style="white-space:nowrap"><span class="${slaClass}">${slaStr}</span></td>
+      <td style="font-size:0.78rem;white-space:nowrap">${r['Branch Name']||r.Branch||'-'}</td>
       ${gelHtml}
     </tr>`;
   }).join('');
@@ -1799,6 +1817,8 @@ function toggleSidebar(){
   mainEl.classList.toggle('sidebar-collapsed');
   const isCollapsed=sidebarEl.classList.contains('collapsed');
   if(sidebarToggleEl)sidebarToggleEl.textContent=isCollapsed?'›':'‹';
+  const hz=document.getElementById('sidebarHotzone');
+  if(hz)hz.title=isCollapsed?'Klik untuk tampilkan sidebar':'Klik untuk minimize sidebar';
   try{localStorage.setItem('sidebarCollapsed',isCollapsed?'1':'0');}catch(e){}
 }
 // Restore state on load
@@ -1806,6 +1826,8 @@ try{if(localStorage.getItem('sidebarCollapsed')==='1'){
   sidebarEl.classList.add('collapsed');
   mainEl.classList.add('sidebar-collapsed');
   if(sidebarToggleEl)sidebarToggleEl.textContent='›';
+  const hz=document.getElementById('sidebarHotzone');
+  if(hz)hz.title='Klik untuk tampilkan sidebar';
 }}catch(e){}
 sidebarToggleEl.addEventListener('click',e=>{e.stopPropagation();toggleSidebar();});
 mobileMenuBtn.addEventListener('click', () => sidebarEl.classList.toggle('mobile-open'));
