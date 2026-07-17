@@ -2229,7 +2229,29 @@ function _renderSfKpi(data){
   const process=data.filter(r=>r['Root Cause']==='Process').length;
   const system=data.filter(r=>r['Root Cause']==='System').length;
   const e=id=>document.getElementById(id);
-  if(e('sfKpiTotal'))e('sfKpiTotal').textContent=total.toLocaleString();
+
+  // Hitung tiket SimFast yang di-exclude di periode ini
+  const allSFInPeriod=filteredData.filter(r=>r['Product Source']==='SimFast');
+  const excluded=allSFInPeriod.filter(r=>!r._sfActive);
+
+  if(e('sfKpiTotal')){
+    e('sfKpiTotal').textContent=total.toLocaleString();
+    // Tampilkan hint jika ada yang dikecualikan
+    const hint=e('sfKpiTotalHint');
+    if(hint){
+      if(excluded.length>0){
+        const beforeImpl=excluded.filter(r=>{const info=getMasterInfo(branchField(r));const d=parseIssueDate(r['Date Submitted']);return info&&info.implementDate&&d&&d<info.implementDate;}).length;
+        const noMaster=excluded.length-beforeImpl;
+        let reasons=[];
+        if(beforeImpl>0)reasons.push(`${beforeImpl} sebelum tgl Implement cabang`);
+        if(noMaster>0)reasons.push(`${noMaster} cabang tidak di Master`);
+        hint.textContent=`ⓘ ${allSFInPeriod.length} total SimFast · ${excluded.length} dikecualikan (${reasons.join(', ')})`;
+        hint.style.display='block';
+      } else {
+        hint.style.display='none';
+      }
+    }
+  }
   if(e('sfKpiBranch'))e('sfKpiBranch').textContent=activeBr;
   if(e('sfKpiPeople'))e('sfKpiPeople').textContent=people;
   if(e('sfKpiProcess'))e('sfKpiProcess').textContent=process;
