@@ -253,28 +253,52 @@
             <div style="font-size:0.69rem;color:#64748b;margin-top:4px">Root Cause = System</div></div>
         </div>
 
-        <!-- Trend Chart + Tren Bulanan -->
-        <div class="charts-row" style="align-items:flex-start">
-          <div class="chart-card chart-lg">
-            <div class="chart-header" style="flex-wrap:wrap;gap:8px">
-              <div>
-                <h3>📈 Tren Tiket per Bulan — SimFast</h3>
-                <p style="color:#94a3b8;font-size:0.75rem;margin-top:2px">Stacked bar = People/Process/System · Klik bar untuk filter detail di bawah</p>
-              </div>
-              <div id="sfTrendRCBtns" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+        <!-- Trend Chart (full width) -->
+        <div class="chart-card">
+          <div class="chart-header" style="flex-wrap:wrap;gap:8px">
+            <div>
+              <h3>📈 Tren Tiket per Bulan — SimFast</h3>
+              <p style="color:#94a3b8;font-size:0.75rem;margin-top:2px">Stacked bar = People/Process/System · Klik bar untuk filter detail di bawah</p>
             </div>
-            <div class="chart-body" style="height:300px"><canvas id="sfTrendChart"></canvas></div>
+            <div id="sfTrendRCBtns" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
           </div>
-          <div class="chart-card" style="flex:0.75;min-width:220px;padding:0">
+          <div class="chart-body" style="height:300px"><canvas id="sfTrendChart"></canvas></div>
+        </div>
+
+        <!-- Growth Table + Tren Bulanan side by side -->
+        <div class="charts-row" style="align-items:flex-start;gap:16px">
+          <!-- Growth Rasio Tabel -->
+          <div class="chart-card" style="flex:1.6;padding:0;min-width:320px">
+            <div class="chart-header" style="padding:14px 16px 10px">
+              <h3>📊 Rasio Pertumbuhan Tiket SimFast</h3>
+              <p style="color:#94a3b8;font-size:0.74rem;margin-top:3px">Growth vs bulan sebelumnya · % komposisi Root Cause</p>
+            </div>
+            <div style="padding:0 4px 8px;overflow-x:auto">
+              <table class="data-table" style="font-size:0.79rem;width:100%;min-width:480px">
+                <thead><tr>
+                  <th style="padding:6px 10px;white-space:nowrap">Bulan</th>
+                  <th style="text-align:right;padding:6px 8px" title="Cabang SimFast aktif s.d bulan ini">Cabang</th>
+                  <th style="text-align:right;padding:6px 8px" title="Total tiket SimFast bulan ini">Total</th>
+                  <th style="text-align:right;padding:6px 8px;white-space:nowrap" title="Pertumbuhan total tiket vs bulan sebelumnya">Growth</th>
+                  <th style="text-align:right;padding:6px 8px;white-space:nowrap" title="Persentase Root Cause = People">% People</th>
+                  <th style="text-align:right;padding:6px 8px;white-space:nowrap" title="Persentase Root Cause = System">% System</th>
+                  <th style="text-align:right;padding:6px 8px;white-space:nowrap" title="Persentase Root Cause = Process">% Process</th>
+                </tr></thead>
+                <tbody id="sfGrowthTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <!-- Tren Bulanan -->
+          <div class="chart-card" style="flex:0.8;min-width:220px;padding:0">
             <div class="chart-header" style="padding:14px 16px 10px"><h3>📅 Tren Bulanan SimFast</h3></div>
             <div style="padding:0 4px 8px;overflow-x:auto">
               <table class="data-table" style="font-size:0.8rem;width:100%;min-width:290px">
                 <thead><tr>
                   <th style="padding:6px 8px">Bulan</th>
-                  <th style="text-align:right;padding:6px 6px" title="Total tiket SimFast — dihitung sejak Implement per cabang">Tiket</th>
-                  <th style="text-align:right;padding:6px 6px" title="Avg kumulatif = rata-rata bulan-bulan SEBELUMNYA (merah=di atas avg, hijau=di bawah avg)">Avg</th>
+                  <th style="text-align:right;padding:6px 6px" title="Total tiket SimFast bulan ini">Tiket</th>
+                  <th style="text-align:right;padding:6px 6px" title="Avg kumulatif = rata-rata bulan-bulan SEBELUMNYA">Avg</th>
                   <th style="text-align:right;padding:6px 8px" title="MoM = perubahan % vs bulan sebelumnya. Merah=naik, Hijau=turun">MoM</th>
-                  <th style="text-align:right;padding:6px 8px" title="Cabang SimFast aktif (sudah Implement) s.d bulan ini">Cbg.</th>
+                  <th style="text-align:right;padding:6px 8px" title="Cabang SimFast aktif s.d bulan ini">Cbg.</th>
                 </tr></thead>
                 <tbody id="sfMonthBreakdownBody"></tbody>
               </table>
@@ -296,15 +320,15 @@
               <thead id="sfDetailThead">
                 <tr>
                   <th style="width:28px">#</th>
-                  <th style="width:65px;text-align:center">Gel.</th>
-                  <th>Cabang</th>
-                  <th style="white-space:nowrap">Tgl. Submit</th>
-                  <th>ID</th>
-                  <th style="min-width:150px">Summary</th>
-                  <th>Kategori</th>
-                  <th>Produk</th>
-                  <th>Root Cause</th>
-                  <th>Cabang</th>
+                  <th class="sf-sortable" data-sf-col="gel" style="width:56px;text-align:center;cursor:pointer">Gel ↕</th>
+                  <th class="sf-sortable" data-sf-col="branch" style="white-space:nowrap;cursor:pointer">Cabang ↕</th>
+                  <th class="sf-sortable" data-sf-col="date" style="white-space:nowrap;cursor:pointer">Tgl. Submit ↕</th>
+                  <th class="sf-sortable" data-sf-col="id" style="white-space:nowrap;cursor:pointer">ID ↕</th>
+                  <th class="sf-sortable" data-sf-col="summary" style="min-width:180px;cursor:pointer">Summary ↕</th>
+                  <th class="sf-sortable" data-sf-col="category" style="min-width:120px;cursor:pointer">Kategori ↕</th>
+                  <th class="sf-sortable" data-sf-col="product" style="white-space:nowrap;cursor:pointer">Produk ↕</th>
+                  <th class="sf-sortable" data-sf-col="rc" style="white-space:nowrap;cursor:pointer">Root Cause ↕</th>
+                  <th class="sf-sortable" data-sf-col="tag" style="white-space:nowrap;cursor:pointer">Tag ↕</th>
                 </tr>
               </thead>
               <tbody id="sfDetailTbody"></tbody>

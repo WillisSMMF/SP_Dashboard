@@ -670,7 +670,7 @@ function renderTicketTable(){
     }
     return `<tr>
       <td style="text-align:center;color:#64748b;font-size:0.75rem;white-space:nowrap">${(currentPage-1)*PAGE_SIZE+i+1}</td>
-      <td style="white-space:nowrap"><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary}">#${r.Id}</a></td>
+      <td style="white-space:nowrap"><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" target="_blank" rel="noopener noreferrer" style="color:${PALETTE.primary}">#${r.Id}</a></td>
       <td style="white-space:nowrap;font-size:0.78rem">${(r['Date Submitted']||'').split(' ')[0]||'-'}</td>
       <td style="font-size:0.82rem;min-width:200px;white-space:normal;word-break:break-word;line-height:1.4">${r.Summary||'-'}</td>
       <td style="font-size:0.78rem;white-space:nowrap">${r.Category||'-'}</td>
@@ -1864,17 +1864,25 @@ function processMasterData(rows){
     const wil=(r['Wilayah']||r['wilayah']||'').trim();
     const hasSimfast=(r['Has_SimFast']||r['has_simfast']||'0')!=='0';
     if(!cab)return;
-    masterBranchMap.set(canonBranch(cab),{branch:cab,gel,implementDate:impl,wilayah:wil,hasSimfast:hasSimfast&&impl!==null});
+    const info={branch:cab,gel,implementDate:impl,wilayah:wil,hasSimfast:hasSimfast&&impl!==null};
+    masterBranchMap.set(canonBranch(cab),info);
+    // Also index by Branch_Code for faster lookup
+    const code=(r['Branch_Code']||r['branch_code']||'').trim().toUpperCase();
+    if(code)masterBranchMap.set(code,info);
   });
 }
 
-function isSimfastBranch(branchName){
-  const info=masterBranchMap.get(canonBranch(branchName));
-  return !!(info&&info.hasSimfast);
-}
-
 function getMasterInfo(branchName){
-  return masterBranchMap.get(canonBranch(branchName))||null;
+  if(!branchName)return null;
+  const key=canonBranch(branchName);
+  // Exact match first
+  let info=masterBranchMap.get(key);
+  if(info)return info;
+  // Fuzzy fallback: find first master entry whose canonBranch is contained in key or vice versa
+  for(const [mKey,mInfo] of masterBranchMap){
+    if(mKey.length>3&&(key.includes(mKey)||mKey.includes(key)))return mInfo;
+  }
+  return null;
 }
 
 function preprocessSimfastData(){
@@ -2213,6 +2221,7 @@ function renderOverviewSimfast(){
   const data=filteredSFData;
   _renderSfKpi(data);
   _renderSfTrendChart(data);
+  _renderSfGrowthTable(data);
   _renderSfMonthBreakdown(data);
   _renderSfDetailTable();
   _renderSfCategoryStackedChart(data);
@@ -2415,35 +2424,41 @@ function _renderSfMonthBreakdown(data){
 // ── TOP KATEGORI STACKED ──────────────────────────────────────────────
 
 function _renderSfDetailTable(){
-  const card=document.getElementById('sfDetailTableCard');
-  const thead=document.getElementById('sfDetailThead');
   const tbody=document.getElementById('sfDetailTbody');
   const title=document.getElementById('sfDetailTitle');
   if(!tbody)return;
 
   let rows=[...filteredSFData];
   if(_sfDetailMonthFilter)rows=rows.filter(r=>getRowMonthKey(r)===_sfDetailMonthFilter);
-  // Ikuti Root Cause yang dipilih di chart Tren (All/People/Process/System)
   if(_sfTrendRC!=='All')rows=rows.filter(r=>r['Root Cause']===_sfTrendRC);
 
-  // Sort: Gel → Cabang → Root Cause → Date
+  // Sort by _sfDetailSortCol and _sfDetailSortDir
+  const col=_sfDetailSortCol, dir=_sfDetailSortDir;
   rows.sort((a,b)=>{
-    const ga=String(a._sfGel??'9'),gb=String(b._sfGel??'9');
-    if(ga!==gb)return ga.localeCompare(gb,undefined,{numeric:true});
-    const ba=branchField(a),bb=branchField(b);
-    if(ba!==bb)return ba.localeCompare(bb);
-    const ra=a['Root Cause']||'',rb=b['Root Cause']||'';
-    if(ra!==rb)return ra.localeCompare(rb);
-    return(parseIssueDate(a['Date Submitted'])||0)-(parseIssueDate(b['Date Submitted'])||0);
+    let av='',bv='';
+    if(col==='gel'){av=String(a._sfGel??'99');bv=String(b._sfGel??'99');return dir==='asc'?av.localeCompare(bv,undefined,{numeric:true}):bv.localeCompare(av,undefined,{numeric:true});}
+    if(col==='branch'){av=branchField(a);bv=branchField(b);}
+    else if(col==='date'){av=String(a['Date Submitted']||'');bv=String(b['Date Submitted']||'');}
+    else if(col==='id'){av=parseInt(a.Id||0);bv=parseInt(b.Id||0);return dir==='asc'?av-bv:bv-av;}
+    else if(col==='summary'){av=a.Summary||'';bv=b.Summary||'';}
+    else if(col==='category'){av=a.Category||'';bv=b.Category||'';}
+    else if(col==='product'){av=a['Product Source']||'';bv=b['Product Source']||'';}
+    else if(col==='rc'){av=a['Root Cause']||'';bv=b['Root Cause']||'';}
+    else if(col==='tag'){
+      // Tag: dari tagData, ambil tag pertama yang match Id
+      const ta=tagData.filter(t=>String(t.Id)===String(a.Id)).map(t=>t.Tag||'').join(',');
+      const tb_=tagData.filter(t=>String(t.Id)===String(b.Id)).map(t=>t.Tag||'').join(',');
+      av=ta;bv=tb_;
+    }
+    return dir==='asc'?av.toString().localeCompare(bv.toString()):bv.toString().localeCompare(av.toString());
   });
 
-  // Label: Bulan aktif (slicer global / klik chart) + Root Cause aktif
+  // Label
   const rcLabel=_sfTrendRC==='All'?'Semua Root Cause':`Root Cause: ${_sfTrendRC}`;
   let monthLabel;
   if(_sfDetailMonthFilter){
-    monthLabel=_sfDetailMonthFilter; // bulan dari klik bar chart
+    monthLabel=_sfDetailMonthFilter;
   } else {
-    // Total bulan SimFast yang TERSEDIA (tanpa filter bulan), agar perbandingan akurat
     const sfAllMonths=_sfGetMonthKeys(allData.filter(r=>r._sfActive));
     const sel=filterState.months;
     if(sel.length===0||sel.length>=sfAllMonths.length){
@@ -2456,24 +2471,38 @@ function _renderSfDetailTable(){
   }
   if(title)title.textContent=`📋 Detail Tiket SimFast — ${monthLabel} · ${rcLabel} (${rows.length} tiket)`;
 
+  // Update sort icons in thead
+  document.querySelectorAll('.sf-sortable').forEach(th=>{
+    const c=th.dataset.sfCol;
+    const icon=th.textContent.replace(/[↑↓↕]/g,'').trim();
+    th.textContent=icon+' '+(c===col?(dir==='asc'?'↑':'↓'):'↕');
+    th.onclick=()=>{
+      if(_sfDetailSortCol===c){_sfDetailSortDir=_sfDetailSortDir==='asc'?'desc':'asc';}
+      else{_sfDetailSortCol=c;_sfDetailSortDir='asc';}
+      _renderSfDetailTable();
+    };
+  });
+
   tbody.innerHTML=rows.map((r,i)=>{
     const gel=r._sfGel!==undefined?`Gel ${r._sfGel}`:'—';
-    const gelColor=r._sfGel!==undefined?SF_RC_COLORS[r['Root Cause']]||PALETTE.primary:'#64748b';
     const rc=r['Root Cause']||'-';
     const rcColor=SF_RC_COLORS[rc]||'#94a3b8';
     const ds=r['Date Submitted'];
     const dateStr=ds instanceof Date?ds.toLocaleDateString('id-ID'):String(ds||'').split(' ')[0];
+    // Tags from tagData
+    const tags=tagData.filter(t=>String(t.Id)===String(r.Id)).map(t=>t.Tag||'').filter(Boolean);
+    const tagStr=tags.length?tags.slice(0,3).join(', ')+(tags.length>3?` +${tags.length-3}`:''): '—';
     return`<tr>
-      <td style="text-align:center;color:#64748b;font-size:0.75rem;padding:5px 6px">${i+1}</td>
-      <td style="text-align:center;padding:5px 6px"><span style="background:${PALETTE.primary}1a;color:${PALETTE.primary};padding:2px 7px;border-radius:10px;font-size:0.75rem;font-weight:700;white-space:nowrap">${gel}</span></td>
-      <td style="font-size:0.79rem;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 6px" title="${branchField(r)}">${branchField(r)}</td>
-      <td style="white-space:nowrap;font-size:0.76rem;padding:5px 6px">${dateStr}</td>
-      <td style="padding:5px 6px"><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" style="color:${PALETTE.primary};font-size:0.78rem">#${r.Id}</a></td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.78rem;padding:5px 6px" title="${r.Summary||''}">${r.Summary||'-'}</td>
-      <td style="font-size:0.77rem;padding:5px 6px">${r.Category||'-'}</td>
-      <td style="font-size:0.77rem;padding:5px 6px"><span style="color:${PALETTE.primary};background:${PALETTE.primary}1a;padding:2px 7px;border-radius:8px;font-size:0.74rem">${r['Product Source']||'-'}</span></td>
-      <td style="padding:5px 6px;font-size:0.77rem"><span style="color:${rcColor};font-weight:700">${rc}</span></td>
-      <td style="font-size:0.77rem;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 6px" title="${branchField(r)}">${branchField(r)}</td>
+      <td style="text-align:center;color:#64748b;font-size:0.74rem;padding:4px 5px;white-space:nowrap">${i+1}</td>
+      <td style="text-align:center;padding:4px 5px"><span style="background:${PALETTE.primary}1a;color:${PALETTE.primary};padding:2px 6px;border-radius:9px;font-size:0.73rem;font-weight:700;white-space:nowrap">${gel}</span></td>
+      <td style="font-size:0.78rem;white-space:nowrap;padding:4px 6px">${branchField(r)}</td>
+      <td style="white-space:nowrap;font-size:0.75rem;padding:4px 6px">${dateStr}</td>
+      <td style="padding:4px 6px;white-space:nowrap"><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" target="_blank" rel="noopener noreferrer" style="color:${PALETTE.primary};font-size:0.78rem">#${r.Id}</a></td>
+      <td style="font-size:0.78rem;padding:4px 6px;min-width:170px;white-space:normal;word-break:break-word;line-height:1.35">${r.Summary||'-'}</td>
+      <td style="font-size:0.77rem;padding:4px 6px;min-width:100px;white-space:normal;word-break:break-word;line-height:1.35">${r.Category||'-'}</td>
+      <td style="font-size:0.75rem;padding:4px 6px;white-space:nowrap"><span style="color:${PALETTE.primary};background:${PALETTE.primary}1a;padding:2px 6px;border-radius:7px;font-size:0.73rem">${r['Product Source']||'-'}</span></td>
+      <td style="padding:4px 6px;white-space:nowrap"><span style="color:${rcColor};font-weight:700;font-size:0.78rem">${rc}</span></td>
+      <td style="font-size:0.75rem;padding:4px 6px;white-space:nowrap;color:#94a3b8">${tagStr}</td>
     </tr>`;
   }).join('')||'<tr><td colspan="10" style="text-align:center;color:#64748b;padding:16px">Tidak ada tiket</td></tr>';
 
@@ -2485,6 +2514,57 @@ window._sfClearDetailFilter=function(){
   _sfTrendRC='All';
   renderOverviewSimfast(); // re-render chart (update RC buttons) + tables
 };
+
+// ── GROWTH TABLE ──────────────────────────────────────────────────────
+function _renderSfGrowthTable(data){
+  const el=document.getElementById('sfGrowthTableBody');if(!el)return;
+  const keys=_sfGetMonthKeys(data);
+  if(!keys.length){el.innerHTML='<tr><td colspan="7" style="text-align:center;color:#64748b;padding:12px">Tidak ada data</td></tr>';return;}
+
+  el.innerHTML=keys.map((k,i)=>{
+    const kRows=data.filter(r=>getRowMonthKey(r)===k);
+    const total=kRows.length;
+    const prev=i>0?data.filter(r=>getRowMonthKey(r)===keys[i-1]).length:null;
+
+    // Growth vs prev month
+    let growthHtml='<span style="color:#475569">–</span>';
+    if(prev!==null){
+      if(prev===0){growthHtml='<span style="color:#f43f5e;font-weight:700">Baru</span>';}
+      else{
+        const g=((total-prev)/prev*100).toFixed(0);
+        const sign=total>prev?'+':'';
+        const col=total>prev?'#f43f5e':total<prev?'#10b981':'#94a3b8';
+        growthHtml=`<span style="color:${col};font-weight:700">${sign}${g}%</span>`;
+      }
+    }
+
+    // RC breakdown %
+    const people=total>0?(kRows.filter(r=>r['Root Cause']==='People').length/total*100).toFixed(1):'0.0';
+    const system=total>0?(kRows.filter(r=>r['Root Cause']==='System').length/total*100).toFixed(1):'0.0';
+    const process=total>0?(kRows.filter(r=>r['Root Cause']==='Process').length/total*100).toFixed(1):'0.0';
+
+    // Active branches at end of this month
+    const parts=k.split(' ');
+    const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
+    const monthEnd=yr&&mo>=0?new Date(yr,mo+1,0):null;
+    const activeBr=monthEnd?[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=monthEnd).length:'—';
+
+    const isNew=i===0;
+    const bgStyle=total>0&&prev!==null&&total>prev?'background:rgba(244,63,94,0.05);':'';
+    return`<tr style="${bgStyle}">
+      <td style="padding:6px 10px;white-space:nowrap;font-weight:600">${k.replace(/^(\d{4}) /,'').slice(0,3)}'${parts[0].slice(2)}</td>
+      <td style="text-align:right;padding:6px 8px;color:#94a3b8">${activeBr}</td>
+      <td style="text-align:right;padding:6px 8px;font-weight:700;color:#f1f5f9">${total}</td>
+      <td style="text-align:right;padding:6px 8px">${growthHtml}</td>
+      <td style="text-align:right;padding:6px 8px;color:${SF_RC_COLORS.People}">${people}%</td>
+      <td style="text-align:right;padding:6px 8px;color:${SF_RC_COLORS.System}">${system}%</td>
+      <td style="text-align:right;padding:6px 8px;color:${SF_RC_COLORS.Process}">${process}%</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── DETAIL TABLE SORT STATE ────────────────────────────────────────────
+let _sfDetailSortCol='gel', _sfDetailSortDir='asc';
 
 // ── MONTH BREAKDOWN TABLE ─────────────────────────────────────────────
 
