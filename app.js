@@ -156,8 +156,8 @@ navItems.forEach(item => {
   });
 });
 
-const SECTION_ICONS = { overview:'📊', simfast:'🚀', tickets:'🎫', sla:'⏱️', branch:'🗺️', tags:'🏷️', drawdown:'💰', map:'🌍' };
-const SECTION_TITLES = { overview:'Overview', simfast:'Overview SimFast', tickets:'Daftar Tiket', sla:'Analisis SLA', branch:'Analisis Cabang', tags:'Analisis Tag', drawdown:'Analisis Drawdown', map:'Peta Cabang (Experiment)' };
+const SECTION_ICONS = { overview:'📊', simfast:'🚀', tickets:'🎫', sla:'⏱️', branch:'🗺️', tags:'🏷️', kategori:'🗂️', drawdown:'💰', map:'🌍' };
+const SECTION_TITLES = { overview:'Overview', simfast:'Overview SimFast', tickets:'Daftar Tiket', sla:'Analisis SLA', branch:'Analisis Cabang', tags:'Analisis Tag', kategori:'Analisis Kategori', drawdown:'Analisis Drawdown', map:'Peta Cabang (Experiment)' };
 
 function navigateTo(section, statusFilter) {
   navItems.forEach(n => n.classList.remove('active'));
@@ -173,6 +173,7 @@ function navigateTo(section, statusFilter) {
   }
   if (section==='map') renderMapSection();
   if (section==='simfast') renderOverviewSimfast();
+  if (section==='kategori') renderKategoriSection();
 }
 
 // ===== FILTER POPULATE =====
@@ -443,6 +444,7 @@ function renderAll(){
   renderTagSection();
   renderDrawdownSection();
   renderOverviewSimfast();
+  if(document.getElementById('section-kategori')?.classList.contains('active'))renderKategoriSection();
   // Map only renders on demand when tab is active
 }
 
@@ -682,17 +684,39 @@ function renderTicketTable(){
       ${gelHtml}
     </tr>`;
   }).join('');
+  paginationEl.dataset.total=data.length;
   renderPagination(data.length);
 }
 function renderPagination(total){
   const pages=Math.ceil(total/PAGE_SIZE);
   if(pages<=1){paginationEl.innerHTML='';return;}
+  const cur=currentPage;
+  const btn=(p,label,disabled,active)=>
+    `<button class="page-btn${active?' active':''}" ${disabled?'disabled':''} onclick="goPage(${p})"
+      style="${disabled?'opacity:0.35;cursor:default;':''}">${label}</button>`;
   let html='';
-  for(let i=1;i<=Math.min(pages,7);i++)html+=`<button class="page-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
-  if(pages>7)html+=`<span style="color:#94a3b8;padding:0 8px">… ${pages} hal.</span>`;
-  paginationEl.innerHTML=html;
+  html+=btn(1,'«',cur===1,false);
+  html+=btn(Math.max(1,cur-1),'‹',cur===1,false);
+  // Smart window: show first, last, current±2, with ellipsis
+  const show=new Set([1,pages,cur,cur-1,cur-2,cur+1,cur+2].filter(p=>p>=1&&p<=pages));
+  const sorted=[...show].sort((a,b)=>a-b);
+  let prev=0;
+  sorted.forEach(p=>{
+    if(prev&&p-prev>1)html+=`<span style="color:#94a3b8;padding:0 2px;align-self:center">…</span>`;
+    html+=btn(p,p,false,p===cur);
+    prev=p;
+  });
+  html+=btn(Math.min(pages,cur+1),'›',cur===pages,false);
+  html+=btn(pages,'»',cur===pages,false);
+  html+=`<span style="color:#64748b;font-size:0.75rem;padding:0 6px;align-self:center">hal ${cur}/${pages} · ${total} tiket</span>`;
+  paginationEl.innerHTML=`<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">${html}</div>`;
 }
-function goPage(p){currentPage=p;renderTicketTable();}
+function goPage(p){
+  const total=paginationEl.dataset.total||0;
+  const pages=Math.ceil(total/PAGE_SIZE);
+  currentPage=Math.max(1,Math.min(pages||1,p));
+  renderTicketTable();
+}
 
 // ===== SLA SECTION =====
 function renderSLA(){
@@ -1788,6 +1812,113 @@ document.getElementById('exportCSV').addEventListener('click', () => exportCSV()
 document.getElementById('exportXLSX').addEventListener('click', () => exportXLSX());
 document.getElementById('exportPDF').addEventListener('click', () => exportPDF());
 
+document.getElementById('exportPDF').addEventListener('click', () => exportPDF());
+
+// ===================================================================
+// ===== KATEGORI SECTION ============================================
+// ===================================================================
+let _katFilterCat=null, _katSortCol='total', _katSortDir='desc';
+
+function renderKategoriSection(){
+  const sec=document.getElementById('section-kategori');
+  if(!sec||!sec.classList.contains('active'))return;
+  const data=filteredData;
+  _renderKatKpi(data);
+  _renderKatStackedChart(data);
+  _renderKatRCPie(data);
+  _renderKatTrend(data);
+  _renderKatSummaryTable(data);
+  _renderKatDetailTable(data);
+}
+
+function _renderKatKpi(data){
+  const el=document.getElementById('katKpiGrid');if(!el)return;
+  const total=data.length;
+  const cats=[...new Set(data.map(r=>r.Category).filter(Boolean))];
+  const resolved=data.filter(r=>r.Status==='resolved').length;
+  const topEntry=Object.entries(data.reduce((acc,r)=>{const c=r.Category||'(Kosong)';acc[c]=(acc[c]||0)+1;return acc;},{})).sort((a,b)=>b[1]-a[1])[0];
+  const kpis=[
+    {label:'Total Tiket',val:total.toLocaleString(),icon:'📋'},
+    {label:'Jumlah Kategori',val:cats.length,icon:'🗂️'},
+    {label:'Resolved',val:resolved.toLocaleString()+` (${total>0?(resolved/total*100).toFixed(1):0}%)`,icon:'✅'},
+    {label:'Kategori Terbanyak',val:topEntry?`${topEntry[0]} (${topEntry[1]})`:'—',icon:'🔝'},
+  ];
+  el.innerHTML=kpis.map(k=>`<div class="kpi-card"><div class="kpi-label">${k.icon} ${k.label}</div><div class="kpi-value" style="font-size:1.1rem">${k.val}</div></div>`).join('');
+}
+
+function _renderKatStackedChart(data){
+  const catCounts=data.reduce((acc,r)=>{const c=r.Category||'(Kosong)';acc[c]=(acc[c]||0)+1;return acc;},{});
+  const cats=Object.entries(catCounts).sort((a,b)=>b[1]-a[1]).slice(0,15).map(x=>x[0]);
+  const insideLbl={id:'katInsLbl',afterDraw(chart){const ctx=chart.ctx;chart.data.datasets.forEach((ds,di)=>{const meta=chart.getDatasetMeta(di);meta.data.forEach((bar,i)=>{const v=ds.data[i];if(!v||v<1)return;const h=Math.abs((bar.base||0)-bar.x);if(h<18)return;ctx.save();ctx.font='bold 9px Inter,sans-serif';ctx.fillStyle='#f1f5f9';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(v,(bar.x+(bar.base||0))/2,bar.y);ctx.restore();});});}};
+  destroyChart('katStacked');
+  const el=document.getElementById('katStackedChart');if(!el)return;
+  charts.katStacked=new Chart(el.getContext('2d'),{type:'bar',plugins:[insideLbl],
+    data:{labels:cats,datasets:SF_RC.map(rc=>({label:rc,stack:'s',data:cats.map(cat=>data.filter(r=>(r.Category||'(Kosong)')===cat&&r['Root Cause']===rc).length),backgroundColor:SF_RC_LIGHT[rc],borderColor:SF_RC_COLORS[rc],borderWidth:1.5}))},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{position:'top',labels:{font:{size:10},usePointStyle:true}}},
+      scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}},
+      onClick(evt,els){if(!els.length)return;const cat=cats[els[0].index];_katFilterCat=_katFilterCat===cat?null:cat;_renderKatSummaryTable(filteredData);_renderKatDetailTable(filteredData);const btn=document.getElementById('katClearFilter');if(btn)btn.style.display=_katFilterCat?'inline-flex':'none';}}});
+}
+
+function _renderKatRCPie(data){
+  const counts=SF_RC.map(rc=>data.filter(r=>r['Root Cause']===rc).length);
+  const other=data.filter(r=>!SF_RC.includes(r['Root Cause'])).length;
+  destroyChart('katRCPie');
+  const el=document.getElementById('katRCPieChart');if(!el)return;
+  charts.katRCPie=new Chart(el.getContext('2d'),{type:'doughnut',data:{labels:[...SF_RC,'Lainnya'],datasets:[{data:[...counts,other],backgroundColor:[...Object.values(SF_RC_LIGHT),'rgba(148,163,184,0.3)'],borderColor:[...Object.values(SF_RC_COLORS),'#94a3b8'],borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:10},usePointStyle:true}}}}});
+}
+
+function _renderKatTrend(data){
+  const keys=_sfGetMonthKeys(data);if(!keys.length)return;
+  const totals=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k).length);
+  const labels=keys.map(k=>{const p=k.split(' ');return p.length>1?`${p[1].slice(0,3)}'${p[0].slice(2)}`:k.slice(0,3);});
+  destroyChart('katTrend');
+  const el=document.getElementById('katTrendChart');if(!el)return;
+  charts.katTrend=new Chart(el.getContext('2d'),{type:'line',data:{labels,datasets:[{label:'Total',data:totals,borderColor:PALETTE.primary,backgroundColor:PALETTE.primary+'22',tension:0.4,fill:true,borderWidth:2,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:9}}},y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'},ticks:{font:{size:9}}}}}});
+}
+
+function _renderKatSummaryTable(data){
+  const tbody=document.getElementById('katSummaryBody');
+  const title=document.getElementById('katTableTitle');
+  if(!tbody)return;
+  const catMap={};
+  data.forEach(r=>{const c=r.Category||'(Kosong)';if(!catMap[c])catMap[c]={category:c,total:0,people:0,system:0,process:0,branches:new Set(),tags:[]};catMap[c].total++;const rc=r['Root Cause']||'';if(rc==='People')catMap[c].people++;else if(rc==='System')catMap[c].system++;else if(rc==='Process')catMap[c].process++;catMap[c].branches.add(branchField(r));const tags=tagData.filter(t=>String(t.Id)===String(r.Id)).map(t=>t.Tag||'').filter(Boolean);catMap[c].tags.push(...tags);});
+  const total=data.length;
+  let rows=Object.values(catMap).map(c=>({...c,branches:[...c.branches]}));
+  rows.sort((a,b)=>{const col=_katSortCol;if(col==='category')return _katSortDir==='asc'?a.category.localeCompare(b.category):b.category.localeCompare(a.category);return _katSortDir==='asc'?(a[col]||0)-(b[col]||0):(b[col]||0)-(a[col]||0);});
+  const filtered=_katFilterCat?rows.filter(r=>r.category===_katFilterCat):rows;
+  if(title)title.textContent=`📋 Summary Kategori${_katFilterCat?` — ${_katFilterCat}`:''} (${filtered.length} kategori)`;
+  document.querySelectorAll('.kat-sort').forEach(th=>{const c=th.dataset.col;const base=th.textContent.replace(/[↑↓↕]/g,'').trim();th.textContent=base+' '+(c===_katSortCol?(_katSortDir==='asc'?'↑':'↓'):'↕');th.onclick=()=>{_katSortCol===c?(_katSortDir=_katSortDir==='asc'?'desc':'asc'):(_katSortCol=c,_katSortDir='desc');_renderKatSummaryTable(filteredData);};});
+  tbody.innerHTML=filtered.map(c=>{
+    const pct=total>0?(c.total/total*100).toFixed(1):'0.0';
+    const topBr=c.branches[0]||'—';const tagCnt={};c.tags.forEach(t=>{tagCnt[t]=(tagCnt[t]||0)+1;});const topTag=Object.entries(tagCnt).sort((a,b)=>b[1]-a[1])[0];
+    const isActive=_katFilterCat===c.category;
+    return`<tr style="cursor:pointer;${isActive?'background:rgba(99,102,241,0.1);':''}" onclick="window._katClickRow('${c.category.replace(/'/g,"\\'")}')">
+      <td style="font-weight:${isActive?700:500};font-size:0.8rem">${c.category}</td>
+      <td style="text-align:right;font-weight:700;color:#f1f5f9">${c.total}</td>
+      <td style="text-align:right;color:${SF_RC_COLORS.People}">${c.people||'—'}</td>
+      <td style="text-align:right;color:${SF_RC_COLORS.System}">${c.system||'—'}</td>
+      <td style="text-align:right;color:${SF_RC_COLORS.Process}">${c.process||'—'}</td>
+      <td style="text-align:right;color:#94a3b8">${pct}%</td>
+      <td style="font-size:0.77rem;white-space:nowrap">${topBr}</td>
+      <td style="font-size:0.77rem;white-space:nowrap">${topTag?`${topTag[0]} (${topTag[1]})`:'—'}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="8" style="text-align:center;color:#64748b;padding:12px">Tidak ada data</td></tr>';
+}
+window._katClickRow=function(cat){_katFilterCat=_katFilterCat===cat?null:cat;const btn=document.getElementById('katClearFilter');if(btn)btn.style.display=_katFilterCat?'inline-flex':'none';_renderKatSummaryTable(filteredData);_renderKatDetailTable(filteredData);const card=document.getElementById('katDetailCard');if(card&&_katFilterCat)card.scrollIntoView({behavior:'smooth',block:'start'});};
+window._katClearFilter=function(){_katFilterCat=null;const btn=document.getElementById('katClearFilter');if(btn)btn.style.display='none';_renderKatSummaryTable(filteredData);_renderKatDetailTable(filteredData);};
+window._katExport=function(){const data=filteredData;const catMap={};data.forEach(r=>{const c=r.Category||'(Kosong)';if(!catMap[c])catMap[c]={total:0,people:0,system:0,process:0};catMap[c].total++;const rc=r['Root Cause']||'';if(rc==='People')catMap[c].people++;else if(rc==='System')catMap[c].system++;else if(rc==='Process')catMap[c].process++;});const rows=[['Kategori','Total','People','System','Process','% Total'],...Object.entries(catMap).sort((a,b)=>b[1].total-a[1].total).map(([c,v])=>[c,v.total,v.people,v.system,v.process,(v.total/data.length*100).toFixed(1)+'%'])];try{const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,'Kategori');XLSX.writeFile(wb,'Kategori_Summary.xlsx');}catch(e){alert('Export gagal: '+e.message);}};
+
+function _renderKatDetailTable(data){
+  const tbody=document.getElementById('katDetailBody');const title=document.getElementById('katDetailTitle');if(!tbody)return;
+  let rows=_katFilterCat?data.filter(r=>(r.Category||'(Kosong)')===_katFilterCat):data;
+  rows=[...rows].sort((a,b)=>String(b['Date Submitted']||'').localeCompare(String(a['Date Submitted']||'')));
+  if(title)title.textContent=`📋 Detail Tiket${_katFilterCat?` — ${_katFilterCat}`:''} (${rows.length} tiket)`;
+  const statusMap={resolved:`<span class="badge badge-resolved">resolved</span>`,assigned:`<span class="badge badge-open">assigned</span>`};
+  tbody.innerHTML=rows.slice(0,200).map((r,i)=>{const rc=r['Root Cause']||'-';const rcColor=SF_RC_COLORS[rc]||'#94a3b8';return`<tr><td style="text-align:center;color:#64748b;font-size:0.74rem">${i+1}</td><td><a href="https://mantis.simasfinance.co.id/view.php?id=${r.Id}" target="_blank" rel="noopener noreferrer" style="color:${PALETTE.primary};font-size:0.78rem">#${r.Id}</a></td><td style="white-space:nowrap;font-size:0.76rem">${String(r['Date Submitted']||'').split(' ')[0]}</td><td style="min-width:170px;font-size:0.78rem;white-space:normal;word-break:break-word;line-height:1.35">${r.Summary||'-'}</td><td style="min-width:100px;font-size:0.77rem;white-space:normal;word-break:break-word">${r.Category||'-'}</td><td style="font-size:0.75rem"><span style="background:${PALETTE.primary}18;color:${PALETTE.primary};padding:2px 6px;border-radius:7px">${r['Product Source']||'-'}</span></td><td>${statusMap[(r.Status||'').toLowerCase()]||`<span class="badge">${r.Status||'-'}</span>`}</td><td style="font-size:0.77rem"><span style="color:${rcColor};font-weight:700">${rc}</span></td><td style="font-size:0.77rem;white-space:nowrap">${branchField(r)}</td></tr>`;}).join('')||'<tr><td colspan="9" style="text-align:center;color:#64748b;padding:14px">Tidak ada tiket</td></tr>';
+  if(rows.length>200)tbody.innerHTML+=`<tr><td colspan="9" style="text-align:center;color:#64748b;font-size:0.78rem;padding:8px">… 200 dari ${rows.length} tiket. Gunakan filter kategori untuk detail lengkap.</td></tr>`;
+}
+
 // ===== DROPDOWN TOGGLE =====
 
 // ===== ADDED FEATURES =====
@@ -2174,7 +2305,6 @@ let _sfDetailMonthFilter=null;
 let _sfClickedCat=null;
 
 function _sfCountActiveBranches(){
-  // Cutoff = akhir periode bulan terpilih
   const months=filterState.months;
   let cutoff=new Date();
   if(months&&months.length){
@@ -2186,13 +2316,17 @@ function _sfCountActiveBranches(){
     const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
     if(yr&&mo>=0)cutoff=new Date(yr,mo+1,0);
   }
-  const selBranches=filterState.branches; // [] = semua SimFast branch
+  const selBranches=filterState.branches;
+  // Deduplicate: masterBranchMap may have 2 keys per branch (name + code)
+  // Use a Set keyed by canonBranch(m.branch) to count each branch once
+  const seen=new Set();
   return[...masterBranchMap.values()].filter(m=>{
-    if(!m.hasSimfast||!m.implementDate)return false; // hanya SimFast branch
-    if(m.implementDate>cutoff)return false;           // belum Implement di periode ini
-    if(selBranches.length>0){                         // filter Gel/Cabang aktif
-      return selBranches.some(b=>canonBranch(b)===canonBranch(m.branch));
-    }
+    if(!m.hasSimfast||!m.implementDate)return false;
+    if(m.implementDate>cutoff)return false;
+    if(selBranches.length>0&&!selBranches.some(b=>canonBranch(b)===canonBranch(m.branch)))return false;
+    const key=canonBranch(m.branch);
+    if(seen.has(key))return false;
+    seen.add(key);
     return true;
   }).length;
 }
@@ -2221,6 +2355,7 @@ function renderOverviewSimfast(){
   const data=filteredSFData;
   _renderSfKpi(data);
   _renderSfTrendChart(data);
+  _renderSfGrowthLineChart(data);
   _renderSfGrowthTable(data);
   _renderSfMonthBreakdown(data);
   _renderSfDetailTable();
@@ -2409,7 +2544,7 @@ function _renderSfMonthBreakdown(data){
     const parts=k.split(' ');
     const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
     const monthEnd=yr&&mo>=0?new Date(yr,mo+1,0):null;
-    const activeBr=monthEnd?[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=monthEnd).length:'—';
+    const activeBr=(()=>{if(!monthEnd)return'—';const seen=new Set();return[...masterBranchMap.values()].filter(m=>{if(!m.hasSimfast||!m.implementDate||m.implementDate>monthEnd)return false;const k=canonBranch(m.branch);if(seen.has(k))return false;seen.add(k);return true;}).length;})();
 
     return`<tr>
       <td style="padding:5px 8px;white-space:nowrap;font-size:0.78rem">${k}</td>
@@ -2515,6 +2650,36 @@ window._sfClearDetailFilter=function(){
   renderOverviewSimfast(); // re-render chart (update RC buttons) + tables
 };
 
+// ── GROWTH LINE CHART ─────────────────────────────────────────────────
+function _renderSfGrowthLineChart(data){
+  const el=document.getElementById('sfGrowthLineChart');if(!el)return;
+  const keys=_sfGetMonthKeys(data);
+  const totals=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k).length);
+  const people=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k&&r['Root Cause']==='People').length);
+  const system=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k&&r['Root Cause']==='System').length);
+  const process=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k&&r['Root Cause']==='Process').length);
+  const labels=keys.map(k=>{const p=k.split(' ');return p.length>1?`${p[1].slice(0,3)} '${p[0].slice(2)}`:k.slice(0,3);});
+  destroyChart('sfGrowthLine');
+  charts.sfGrowthLine=new Chart(el.getContext('2d'),{type:'line',
+    data:{labels,datasets:[
+      {label:'Total',data:totals,borderColor:'#94a3b8',backgroundColor:'#94a3b822',tension:0.4,fill:true,borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#94a3b8'},
+      {label:'People',data:people,borderColor:SF_RC_COLORS.People,backgroundColor:SF_RC_COLORS.People+'18',tension:0.4,fill:false,borderWidth:2,pointRadius:3,pointBackgroundColor:SF_RC_COLORS.People},
+      {label:'System',data:system,borderColor:SF_RC_COLORS.System,backgroundColor:SF_RC_COLORS.System+'18',tension:0.4,fill:false,borderWidth:2,pointRadius:3,pointBackgroundColor:SF_RC_COLORS.System},
+      {label:'Process',data:process,borderColor:SF_RC_COLORS.Process,backgroundColor:SF_RC_COLORS.Process+'18',tension:0.4,fill:false,borderWidth:2,pointRadius:3,pointBackgroundColor:SF_RC_COLORS.Process}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{usePointStyle:true,font:{size:11},padding:14}},
+        tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8',
+          callbacks:{afterBody(items){
+            const i=items[0].dataIndex;
+            const t=totals[i];
+            const p=people[i],s=system[i],pr=process[i];
+            return t>0?[`People: ${(p/t*100).toFixed(1)}% · System: ${(s/t*100).toFixed(1)}% · Process: ${(pr/t*100).toFixed(1)}%`]:[];
+          }}}
+      },
+      scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}}});
+}
+
 // ── GROWTH TABLE ──────────────────────────────────────────────────────
 function _renderSfGrowthTable(data){
   const el=document.getElementById('sfGrowthTableBody');if(!el)return;
@@ -2547,7 +2712,7 @@ function _renderSfGrowthTable(data){
     const parts=k.split(' ');
     const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
     const monthEnd=yr&&mo>=0?new Date(yr,mo+1,0):null;
-    const activeBr=monthEnd?[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=monthEnd).length:'—';
+    const activeBr=(()=>{if(!monthEnd)return'—';const seen=new Set();return[...masterBranchMap.values()].filter(m=>{if(!m.hasSimfast||!m.implementDate||m.implementDate>monthEnd)return false;const k=canonBranch(m.branch);if(seen.has(k))return false;seen.add(k);return true;}).length;})();
 
     const isNew=i===0;
     const bgStyle=total>0&&prev!==null&&total>prev?'background:rgba(244,63,94,0.05);':'';
