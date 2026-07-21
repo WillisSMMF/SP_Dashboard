@@ -2305,7 +2305,6 @@ let _sfDetailMonthFilter=null;
 let _sfClickedCat=null;
 
 function _sfCountActiveBranches(){
-  // Cutoff = akhir periode bulan terpilih
   const months=filterState.months;
   let cutoff=new Date();
   if(months&&months.length){
@@ -2317,13 +2316,17 @@ function _sfCountActiveBranches(){
     const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
     if(yr&&mo>=0)cutoff=new Date(yr,mo+1,0);
   }
-  const selBranches=filterState.branches; // [] = semua SimFast branch
+  const selBranches=filterState.branches;
+  // Deduplicate: masterBranchMap may have 2 keys per branch (name + code)
+  // Use a Set keyed by canonBranch(m.branch) to count each branch once
+  const seen=new Set();
   return[...masterBranchMap.values()].filter(m=>{
-    if(!m.hasSimfast||!m.implementDate)return false; // hanya SimFast branch
-    if(m.implementDate>cutoff)return false;           // belum Implement di periode ini
-    if(selBranches.length>0){                         // filter Gel/Cabang aktif
-      return selBranches.some(b=>canonBranch(b)===canonBranch(m.branch));
-    }
+    if(!m.hasSimfast||!m.implementDate)return false;
+    if(m.implementDate>cutoff)return false;
+    if(selBranches.length>0&&!selBranches.some(b=>canonBranch(b)===canonBranch(m.branch)))return false;
+    const key=canonBranch(m.branch);
+    if(seen.has(key))return false;
+    seen.add(key);
     return true;
   }).length;
 }
@@ -2541,7 +2544,7 @@ function _renderSfMonthBreakdown(data){
     const parts=k.split(' ');
     const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
     const monthEnd=yr&&mo>=0?new Date(yr,mo+1,0):null;
-    const activeBr=monthEnd?[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=monthEnd).length:'—';
+    const activeBr=(()=>{if(!monthEnd)return'—';const seen=new Set();return[...masterBranchMap.values()].filter(m=>{if(!m.hasSimfast||!m.implementDate||m.implementDate>monthEnd)return false;const k=canonBranch(m.branch);if(seen.has(k))return false;seen.add(k);return true;}).length;})();
 
     return`<tr>
       <td style="padding:5px 8px;white-space:nowrap;font-size:0.78rem">${k}</td>
@@ -2709,7 +2712,7 @@ function _renderSfGrowthTable(data){
     const parts=k.split(' ');
     const yr=parseInt(parts[0]),mo=MONTH_ORDER.indexOf(parts[parts.length-1]);
     const monthEnd=yr&&mo>=0?new Date(yr,mo+1,0):null;
-    const activeBr=monthEnd?[...masterBranchMap.values()].filter(m=>m.hasSimfast&&m.implementDate&&m.implementDate<=monthEnd).length:'—';
+    const activeBr=(()=>{if(!monthEnd)return'—';const seen=new Set();return[...masterBranchMap.values()].filter(m=>{if(!m.hasSimfast||!m.implementDate||m.implementDate>monthEnd)return false;const k=canonBranch(m.branch);if(seen.has(k))return false;seen.add(k);return true;}).length;})();
 
     const isNew=i===0;
     const bgStyle=total>0&&prev!==null&&total>prev?'background:rgba(244,63,94,0.05);':'';
