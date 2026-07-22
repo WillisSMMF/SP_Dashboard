@@ -2354,10 +2354,8 @@ function renderOverviewSimfast(){
   if(!sec||!sec.classList.contains('active'))return;
   const data=filteredSFData;
   _renderSfKpi(data);
-  _renderSfTrendChart(data);
-  _renderSfGrowthLineChart(data);
+  _renderSfUnifiedChart(data);   // replaces sfTrendChart + sfGrowthLineChart
   _renderSfGrowthTable(data);
-  _renderSfMonthBreakdown(data);
   _renderSfDetailTable();
   _renderSfCategoryStackedChart(data);
   _renderSfRCPieChart(data);
@@ -2417,19 +2415,23 @@ window._sfKpiRCClick=function(rc){
 
 // ── MONTH KEYS ────────────────────────────────────────────────────────
 
-function _renderSfTrendChart(data){
+function _renderSfUnifiedChart(data){
+  const el=document.getElementById('sfUnifiedChart');if(!el)return;
   const keys=_sfGetMonthKeys(data);
+  const labels=keys.map(k=>{const p=k.split(' ');return p.length>1?`${p[1].slice(0,3)} '${p[0].slice(2)}`:k.slice(0,3);});
   const byKey=k=>data.filter(r=>getRowMonthKey(r)===k);
-  const peopleCounts=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='People').length);
-  const processCounts=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='Process').length);
-  const systemCounts=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='System').length);
-  const totalCounts=keys.map((_,i)=>peopleCounts[i]+processCounts[i]+systemCounts[i]);
+  const people=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='People').length);
+  const process=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='Process').length);
+  const system=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='System').length);
+  const totals=keys.map((_,i)=>people[i]+process[i]+system[i]);
 
-  const trendSource=_sfTrendRC==='People'?peopleCounts:_sfTrendRC==='Process'?processCounts:_sfTrendRC==='System'?systemCounts:totalCounts;
-  const trendColor=_sfTrendRC==='People'?SF_RC_COLORS.People:_sfTrendRC==='Process'?SF_RC_COLORS.Process:_sfTrendRC==='System'?SF_RC_COLORS.System:PALETTE.amber;
+  // Line curve data depends on _sfTrendRC filter
+  const lineData=_sfTrendRC==='People'?people:_sfTrendRC==='Process'?process:_sfTrendRC==='System'?system:totals;
+  const lineColor=_sfTrendRC==='People'?SF_RC_COLORS.People:_sfTrendRC==='Process'?SF_RC_COLORS.Process:_sfTrendRC==='System'?SF_RC_COLORS.System:'#94a3b8';
+  const lineLabel=_sfTrendRC==='All'?'Tren: Total':`Tren: ${_sfTrendRC}`;
 
-  // label inside bar plugin
-  const insideLabel={id:'sfInsLbl',afterDraw(chart){
+  // Label inside bar plugin
+  const insLbl={id:'sfUnifInsLbl',afterDraw(chart){
     const ctx=chart.ctx;
     chart.data.datasets.forEach((ds,di)=>{
       if(ds.type==='line')return;
@@ -2444,24 +2446,25 @@ function _renderSfTrendChart(data){
     });
   }};
 
-  destroyChart('sfTrend');
-  const el=document.getElementById('sfTrendChart');if(!el)return;
-  charts.sfTrend=new Chart(el.getContext('2d'),{
-    type:'bar',plugins:[insideLabel],
-    data:{labels:keys,datasets:[
-      {label:'People',data:peopleCounts,backgroundColor:SF_RC_LIGHT.People,borderColor:SF_RC_COLORS.People,borderWidth:1.5,stack:'rc',order:3},
-      {label:'Process',data:processCounts,backgroundColor:SF_RC_LIGHT.Process,borderColor:SF_RC_COLORS.Process,borderWidth:1.5,stack:'rc',order:4},
-      {label:'System',data:systemCounts,backgroundColor:SF_RC_LIGHT.System,borderColor:SF_RC_COLORS.System,borderWidth:1.5,stack:'rc',order:5},
-      {label:`Tren: ${_sfTrendRC}`,data:trendSource,type:'line',borderColor:trendColor,backgroundColor:'transparent',borderWidth:2.5,tension:0.35,pointRadius:4,pointBackgroundColor:trendColor,pointBorderColor:'#0f172a',pointBorderWidth:2,order:1}
+  destroyChart('sfUnified');
+  charts.sfUnified=new Chart(el.getContext('2d'),{
+    type:'bar',plugins:[insLbl],
+    data:{labels,datasets:[
+      {label:'People',data:people,backgroundColor:SF_RC_LIGHT.People,borderColor:SF_RC_COLORS.People,borderWidth:1.5,stack:'rc',order:3},
+      {label:'Process',data:process,backgroundColor:SF_RC_LIGHT.Process,borderColor:SF_RC_COLORS.Process,borderWidth:1.5,stack:'rc',order:4},
+      {label:'System',data:system,backgroundColor:SF_RC_LIGHT.System,borderColor:SF_RC_COLORS.System,borderWidth:1.5,stack:'rc',order:5},
+      {label:lineLabel,data:lineData,type:'line',borderColor:lineColor,backgroundColor:lineColor+'22',
+       tension:0.35,fill:_sfTrendRC==='All',pointRadius:4,pointBackgroundColor:lineColor,
+       pointBorderColor:'#0f172a',pointBorderWidth:2,borderWidth:2.5,order:1}
     ]},
     options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:8}},
       plugins:{
         legend:{position:'top',labels:{font:{size:10},usePointStyle:true,padding:12}},
         tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8',
           callbacks:{
-            title(items){return items[0].label;},
+            title(items){return keys[items[0].dataIndex];},
             beforeBody(items){
-              const k=items[0].label;
+              const k=keys[items[0].dataIndex];
               const kRows=data.filter(r=>getRowMonthKey(r)===k);
               const p=kRows.filter(r=>r['Root Cause']==='People').length;
               const pr=kRows.filter(r=>r['Root Cause']==='Process').length;
@@ -2482,19 +2485,22 @@ function _renderSfTrendChart(data){
         if(!elements.length)return;
         const k=keys[elements[0].index];
         _sfDetailMonthFilter=_sfDetailMonthFilter===k?null:k;
+        _sfDetailRCFilter=null;
         _renderSfDetailTable();
-        const el=document.getElementById('sfDetailTableCard');
-        if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+        const el2=document.getElementById('sfDetailTableCard');
+        if(el2)el2.scrollIntoView({behavior:'smooth',block:'start'});
       }
     }
   });
 
-  // Render RC filter buttons
+  // RC filter buttons
   const btnWrap=document.getElementById('sfTrendRCBtns');
   if(btnWrap){
-    btnWrap.innerHTML=['All',...SF_RC].map(rc=>`<button onclick="window._sfSetTrendRC('${rc}')" style="padding:4px 12px;border-radius:20px;border:none;cursor:pointer;font-size:0.77rem;font-weight:600;transition:all 0.15s;background:${_sfTrendRC===rc?(rc==='All'?PALETTE.amber:SF_RC_COLORS[rc]):'rgba(255,255,255,0.08)'};color:${_sfTrendRC===rc?'#0f172a':'#94a3b8'}">${rc}</button>`).join('');
+    btnWrap.innerHTML=['All',...SF_RC].map(rc=>`<button onclick="window._sfSetTrendRC(\'${rc}\')" style="padding:4px 12px;border-radius:20px;border:none;cursor:pointer;font-size:0.77rem;font-weight:600;transition:all 0.15s;background:${_sfTrendRC===rc?(rc==='All'?'#94a3b8':SF_RC_COLORS[rc]):'rgba(255,255,255,0.08)'};color:${_sfTrendRC===rc?'#0f172a':'#94a3b8'}">${rc}</button>`).join('');
   }
 }
+window._sfSetTrendRC=function(rc){_sfTrendRC=rc;_renderSfUnifiedChart(filteredSFData);_renderSfDetailTable();};
+
 // Set Root Cause filter (All/People/Process/System) — re-render seluruh section SimFast
 window._sfSetTrendRC=function(rc){
   _sfTrendRC=rc;
@@ -2564,6 +2570,7 @@ function _renderSfDetailTable(){
   if(!tbody)return;
 
   let rows=[...filteredSFData];
+  if(_sfClickedCat)rows=rows.filter(r=>(r.Category||'Lainnya')===_sfClickedCat);
   if(_sfDetailMonthFilter)rows=rows.filter(r=>getRowMonthKey(r)===_sfDetailMonthFilter);
   if(_sfTrendRC!=='All')rows=rows.filter(r=>r['Root Cause']===_sfTrendRC);
 
@@ -2647,38 +2654,17 @@ function _renderSfDetailTable(){
 window._sfClearDetailFilter=function(){
   _sfDetailMonthFilter=null;
   _sfTrendRC='All';
-  renderOverviewSimfast(); // re-render chart (update RC buttons) + tables
+  _sfClickedCat=null;
+  const badge=document.getElementById('sfCatFilterBadge');
+  const resetCatBtn=document.getElementById('sfCatResetBtn');
+  if(badge){badge.textContent='';badge.style.display='none';}
+  if(resetCatBtn)resetCatBtn.style.display='none';
+  _renderSfUnifiedChart(filteredSFData);
+  _renderSfRCPieChart(filteredSFData);
+  renderOverviewSimfast();
 };
 
 // ── GROWTH LINE CHART ─────────────────────────────────────────────────
-function _renderSfGrowthLineChart(data){
-  const el=document.getElementById('sfGrowthLineChart');if(!el)return;
-  const keys=_sfGetMonthKeys(data);
-  const totals=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k).length);
-  const people=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k&&r['Root Cause']==='People').length);
-  const system=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k&&r['Root Cause']==='System').length);
-  const process=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k&&r['Root Cause']==='Process').length);
-  const labels=keys.map(k=>{const p=k.split(' ');return p.length>1?`${p[1].slice(0,3)} '${p[0].slice(2)}`:k.slice(0,3);});
-  destroyChart('sfGrowthLine');
-  charts.sfGrowthLine=new Chart(el.getContext('2d'),{type:'line',
-    data:{labels,datasets:[
-      {label:'Total',data:totals,borderColor:'#94a3b8',backgroundColor:'#94a3b822',tension:0.4,fill:true,borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#94a3b8'},
-      {label:'People',data:people,borderColor:SF_RC_COLORS.People,backgroundColor:SF_RC_COLORS.People+'18',tension:0.4,fill:false,borderWidth:2,pointRadius:3,pointBackgroundColor:SF_RC_COLORS.People},
-      {label:'System',data:system,borderColor:SF_RC_COLORS.System,backgroundColor:SF_RC_COLORS.System+'18',tension:0.4,fill:false,borderWidth:2,pointRadius:3,pointBackgroundColor:SF_RC_COLORS.System},
-      {label:'Process',data:process,borderColor:SF_RC_COLORS.Process,backgroundColor:SF_RC_COLORS.Process+'18',tension:0.4,fill:false,borderWidth:2,pointRadius:3,pointBackgroundColor:SF_RC_COLORS.Process}
-    ]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'top',labels:{usePointStyle:true,font:{size:11},padding:14}},
-        tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8',
-          callbacks:{afterBody(items){
-            const i=items[0].dataIndex;
-            const t=totals[i];
-            const p=people[i],s=system[i],pr=process[i];
-            return t>0?[`People: ${(p/t*100).toFixed(1)}% · System: ${(s/t*100).toFixed(1)}% · Process: ${(pr/t*100).toFixed(1)}%`]:[];
-          }}}
-      },
-      scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}}}});
-}
 
 // ── GROWTH TABLE ──────────────────────────────────────────────────────
 function _renderSfGrowthTable(data){
@@ -2737,7 +2723,6 @@ function _renderSfCategoryStackedChart(data){
   const cats=Object.entries(
     data.reduce((acc,r)=>{acc[r.Category||'Lainnya']=(acc[r.Category||'Lainnya']||0)+1;return acc;},{}))
     .sort((a,b)=>b[1]-a[1]).slice(0,10).map(x=>x[0]);
-
   const insideLabel={id:'sfCatInsLbl',afterDraw(chart){
     const ctx=chart.ctx;
     chart.data.datasets.forEach((ds,di)=>{
@@ -2751,7 +2736,6 @@ function _renderSfCategoryStackedChart(data){
       });
     });
   }};
-
   destroyChart('sfCategory');
   const el=document.getElementById('sfCategoryChart');if(!el)return;
   charts.sfCategory=new Chart(el.getContext('2d'),{
@@ -2764,8 +2748,33 @@ function _renderSfCategoryStackedChart(data){
     options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
       plugins:{legend:{position:'top',labels:{font:{size:10},usePointStyle:true}},
         tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8'}},
-      scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}}}});
+      scales:{x:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:10}}}},
+      onClick(evt,elements){
+        if(!elements.length)return;
+        const clickedCat=cats[elements[0].index];
+        _sfClickedCat=_sfClickedCat===clickedCat?null:clickedCat;
+        const badge=document.getElementById('sfCatFilterBadge');
+        const resetBtn=document.getElementById('sfCatResetBtn');
+        if(badge){badge.textContent=_sfClickedCat?`🗂️ ${_sfClickedCat}`:'';badge.style.display=_sfClickedCat?'inline':'none';}
+        if(resetBtn)resetBtn.style.display=_sfClickedCat?'inline-flex':'none';
+        const catData=_sfClickedCat?filteredSFData.filter(r=>(r.Category||'Lainnya')===_sfClickedCat):filteredSFData;
+        _renderSfUnifiedChart(catData);
+        _renderSfRCPieChart(catData);
+        _renderSfDetailTable();
+      }
+    }
+  });
 }
+window._sfClearCatFilter=function(){
+  _sfClickedCat=null;
+  const badge=document.getElementById('sfCatFilterBadge');
+  const resetBtn=document.getElementById('sfCatResetBtn');
+  if(badge){badge.textContent='';badge.style.display='none';}
+  if(resetBtn)resetBtn.style.display='none';
+  _renderSfUnifiedChart(filteredSFData);
+  _renderSfRCPieChart(filteredSFData);
+  _renderSfDetailTable();
+};
 
 // ── PIE CHART ROOT CAUSE ─────────────────────────────────────────────
 
