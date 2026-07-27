@@ -2420,17 +2420,46 @@ function _renderSfUnifiedChart(data){
   const keys=_sfGetMonthKeys(data);
   const labels=keys.map(k=>{const p=k.split(' ');return p.length>1?`${p[1].slice(0,3)} '${p[0].slice(2)}`:k.slice(0,3);});
   const byKey=k=>data.filter(r=>getRowMonthKey(r)===k);
-  const people=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='People').length);
+  const people =keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='People').length);
   const process=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='Process').length);
-  const system=keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='System').length);
-  const totals=keys.map((_,i)=>people[i]+process[i]+system[i]);
+  const system =keys.map(k=>byKey(k).filter(r=>r['Root Cause']==='System').length);
+  const totals =keys.map((_,i)=>people[i]+process[i]+system[i]);
 
-  // Line curve data depends on _sfTrendRC filter
-  const lineData=_sfTrendRC==='People'?people:_sfTrendRC==='Process'?process:_sfTrendRC==='System'?system:totals;
-  const lineColor=_sfTrendRC==='People'?SF_RC_COLORS.People:_sfTrendRC==='Process'?SF_RC_COLORS.Process:_sfTrendRC==='System'?SF_RC_COLORS.System:'#94a3b8';
-  const lineLabel=_sfTrendRC==='All'?'Tren: Total':`Tren: ${_sfTrendRC}`;
+  const isAll=_sfTrendRC==='All';
 
-  // Label inside bar plugin
+  // Bar datasets: stacked only when All, grouped (no stack) when single RC
+  const barDatasets=[];
+  const mkBar=(rc,d)=>({
+    label:rc+' (bar)',data:d,
+    backgroundColor:SF_RC_LIGHT[rc],borderColor:SF_RC_COLORS[rc],
+    borderWidth:1.5,borderRadius:3,type:'bar',
+    stack:isAll?'s':undefined,  // stacked only when All
+    order:5
+  });
+  if(isAll||_sfTrendRC==='People')  barDatasets.push(mkBar('People',people));
+  if(isAll||_sfTrendRC==='Process') barDatasets.push(mkBar('Process',process));
+  if(isAll||_sfTrendRC==='System')  barDatasets.push(mkBar('System',system));
+
+  // Line curves
+  const mkLine=(label,d,col,fill)=>({
+    label,data:d,type:'line',
+    borderColor:col,backgroundColor:col+'22',fill,
+    tension:0.35,pointRadius:4,pointBackgroundColor:col,
+    pointBorderColor:'#0f172a',pointBorderWidth:2,borderWidth:2.5,order:1
+  });
+  const lineDatasets=[];
+  if(isAll){
+    lineDatasets.push(mkLine('Total',totals,'#94a3b8',false));
+    lineDatasets.push(mkLine('People',people,SF_RC_COLORS.People,false));
+    lineDatasets.push(mkLine('Process',process,SF_RC_COLORS.Process,false));
+    lineDatasets.push(mkLine('System',system,SF_RC_COLORS.System,false));
+  } else {
+    const rc=_sfTrendRC;
+    const d=rc==='People'?people:rc==='Process'?process:system;
+    lineDatasets.push(mkLine(`Tren: ${rc}`,d,SF_RC_COLORS[rc],true));
+  }
+
+  // Inside-bar number labels
   const insLbl={id:'sfUnifInsLbl',afterDraw(chart){
     const ctx=chart.ctx;
     chart.data.datasets.forEach((ds,di)=>{
@@ -2438,10 +2467,10 @@ function _renderSfUnifiedChart(data){
       const meta=chart.getDatasetMeta(di);
       meta.data.forEach((bar,i)=>{
         const v=ds.data[i];if(!v||v<1)return;
-        const h=Math.abs((bar.base||0)-bar.y);if(h<14)return;
+        const barH=Math.abs(bar.base-bar.y);if(barH<14)return;
         ctx.save();ctx.font='bold 9px Inter,sans-serif';ctx.fillStyle='#f1f5f9';
         ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.fillText(v,bar.x,(bar.y+(bar.base||0))/2);ctx.restore();
+        ctx.fillText(v,bar.x,bar.y+barH/2);ctx.restore();
       });
     });
   }};
@@ -2449,17 +2478,11 @@ function _renderSfUnifiedChart(data){
   destroyChart('sfUnified');
   charts.sfUnified=new Chart(el.getContext('2d'),{
     type:'bar',plugins:[insLbl],
-    data:{labels,datasets:[
-      {label:'People',data:people,backgroundColor:SF_RC_LIGHT.People,borderColor:SF_RC_COLORS.People,borderWidth:1.5,stack:'rc',order:3},
-      {label:'Process',data:process,backgroundColor:SF_RC_LIGHT.Process,borderColor:SF_RC_COLORS.Process,borderWidth:1.5,stack:'rc',order:4},
-      {label:'System',data:system,backgroundColor:SF_RC_LIGHT.System,borderColor:SF_RC_COLORS.System,borderWidth:1.5,stack:'rc',order:5},
-      {label:lineLabel,data:lineData,type:'line',borderColor:lineColor,backgroundColor:lineColor+'22',
-       tension:0.35,fill:_sfTrendRC==='All',pointRadius:4,pointBackgroundColor:lineColor,
-       pointBorderColor:'#0f172a',pointBorderWidth:2,borderWidth:2.5,order:1}
-    ]},
+    data:{labels,datasets:[...barDatasets,...lineDatasets]},
     options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:8}},
       plugins:{
-        legend:{position:'top',labels:{font:{size:10},usePointStyle:true,padding:12}},
+        legend:{position:'top',labels:{font:{size:10},usePointStyle:true,padding:12,
+          filter(item){return !item.text.endsWith(' (bar)');}}},
         tooltip:{backgroundColor:'#1e293b',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,titleColor:'#f1f5f9',bodyColor:'#94a3b8',
           callbacks:{
             title(items){return keys[items[0].dataIndex];},
@@ -2478,27 +2501,35 @@ function _renderSfUnifiedChart(data){
         }
       },
       scales:{
-        x:{stacked:true,grid:{display:false},ticks:{font:{size:10}}},
-        y:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}
+        x:{grid:{display:false},ticks:{font:{size:10}}},
+        y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}
       },
       onClick(evt,elements){
         if(!elements.length)return;
         const k=keys[elements[0].index];
         _sfDetailMonthFilter=_sfDetailMonthFilter===k?null:k;
-        _sfDetailRCFilter=null;
         _renderSfDetailTable();
-        const el2=document.getElementById('sfDetailTableCard');
-        if(el2)el2.scrollIntoView({behavior:'smooth',block:'start'});
+        const elD=document.getElementById('sfDetailTableCard');
+        if(elD)elD.scrollIntoView({behavior:'smooth',block:'start'});
       }
     }
   });
 
-  // RC filter buttons
+  // RC toggle buttons
   const btnWrap=document.getElementById('sfTrendRCBtns');
   if(btnWrap){
-    btnWrap.innerHTML=['All',...SF_RC].map(rc=>`<button onclick="window._sfSetTrendRC(\'${rc}\')" style="padding:4px 12px;border-radius:20px;border:none;cursor:pointer;font-size:0.77rem;font-weight:600;transition:all 0.15s;background:${_sfTrendRC===rc?(rc==='All'?'#94a3b8':SF_RC_COLORS[rc]):'rgba(255,255,255,0.08)'};color:${_sfTrendRC===rc?'#0f172a':'#94a3b8'}">${rc}</button>`).join('');
+    btnWrap.innerHTML=['All',...SF_RC].map(rc=>{
+      const active=_sfTrendRC===rc;
+      const col=rc==='All'?'#94a3b8':SF_RC_COLORS[rc];
+      return`<button onclick="window._sfSetTrendRC('${rc}')"
+        style="padding:4px 13px;border-radius:20px;cursor:pointer;font-size:0.77rem;font-weight:600;transition:all 0.15s;
+          border:1.5px solid ${active?col:'rgba(255,255,255,0.12)'};
+          background:${active?col+'22':'rgba(255,255,255,0.05)'};
+          color:${active?col:'#94a3b8'}">${rc}</button>`;
+    }).join('');
   }
 }
+
 window._sfSetTrendRC=function(rc){_sfTrendRC=rc;_renderSfUnifiedChart(filteredSFData);_renderSfDetailTable();};
 
 // Set Root Cause filter (All/People/Process/System) — re-render seluruh section SimFast
@@ -2926,3 +2957,4 @@ function _ddStarHtml(stars,row){
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => { loadData(); });
+
