@@ -291,7 +291,6 @@ function applyGlobalFilters(){
   });
   filteredDDData=ddData.filter(r=>{
     if(useDateFilter){
-      // Parse DD Submit Date for date range check
       const d=parseDDDate(r['Submit Date']);
       if(!d)return false;
       const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -300,7 +299,17 @@ function applyGlobalFilters(){
     } else {
       if(selMonths.length){const d=parseDDDate(r['Submit Date']);if(!d)return false;const k=d.year?`${d.year} ${d.month}`:d.month;if(!selMonths.includes(k)&&!selMonths.some(s=>s.split(' ').pop()===d.month))return false;}
     }
-    if(selBranches.length){const ddCanon=canonBranch(r['Branch Name']||'');if(!selBranches.some(b=>canonBranch(b)===ddCanon))return false;}
+    // Branch filter: jika ada pilihan cabang (dari slicer Cabang atau Gel)
+    if(selBranches.length){
+      const ddCanon=canonBranch(r['Branch Name']||'');
+      if(!selBranches.some(b=>canonBranch(b)===ddCanon))return false;
+    }
+    // Gel filter: jika Gel dipilih tapi tidak ada branch filter, filter via masterBranchMap
+    if(!selBranches.length&&filterState_gels.length>0){
+      const ddCanon=canonBranch(r['Branch Name']||'');
+      const info=getMasterInfo(r['Branch Name']||'');
+      if(!info||!filterState_gels.includes(String(info.gel)))return false;
+    }
     return true;
   });
   filteredSFData=allData.filter(r=>{
@@ -1571,10 +1580,33 @@ function renderDDBestBranchChart(branchDD){
 document.getElementById('exportDDCSV').addEventListener('click',()=>exportDDTable('csv'));
 document.getElementById('exportDDXLSX').addEventListener('click',()=>exportDDTable('xlsx'));
 function exportDDTable(format){
-  // FIX #2: Export DD table data sesuai filter aktif
-  const data=(window._ddTableData||[]).map(row=>({'Rank':row.rank,'Cabang':row.branch,'Total Drawdown':row.ddCount,'Total Issue':row.issueCount,'Rasio Issue':row.ratioStr,'Issue Terbesar':row.topCatStr,'Tag Terbanyak':row.topTagStr}));
-  if(format==='csv')exportCSV(data,'drawdown-vs-issue.csv');
-  else exportXLSX(data,'drawdown-vs-issue.xlsx');
+  const data=(window._ddTableData||[]);
+  if(!data.length){alert('Tidak ada data untuk diexport.');return;}
+  // Build export rows with filter context
+  const rows=data.map(row=>({
+    'Rank':row.rank,
+    'Cabang':row.branch,
+    'Total Drawdown (Unique Order)':row.ddCount,
+    'Rasio DD %':row.ratioDDPct,
+    'Total Issue':row.issueCount,
+    'Rasio Issue %':row.ratioPct,
+    'Issue Terbesar':row.topCatStr,
+    'Tag Terbanyak':row.topTagStr
+  }));
+  // Add filter info as header row
+  const gelLabel=filterState_gels.length?`Gel ${filterState_gels.join(',')}` :'Semua Gel';
+  const brLabel=filterState.branches.length?`${filterState.branches.length} Cabang`:'Semua Cabang';
+  const monLabel=filterState.months.length?filterState.months.join('; '):'Semua Bulan';
+  const tglLabel=(dateFilter.from||dateFilter.to)?document.getElementById('filterDateLabel')?.textContent||'':'-';
+  const filterInfo=`Bulan: ${monLabel} | Cabang: ${brLabel} | Gel: ${gelLabel}${tglLabel&&tglLabel!=='-'?' | Tgl: '+tglLabel:''}`;
+  if(format==='csv'){
+    exportCSV([{'Filter Aktif':filterInfo},...rows],'drawdown-vs-issue.csv');
+  } else {
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.json_to_sheet([{'Filter Aktif':filterInfo},...rows]);
+    XLSX.utils.book_append_sheet(wb,ws,'Drawdown vs Issue');
+    XLSX.writeFile(wb,'drawdown-vs-issue.xlsx');
+  }
 }
 
 // ===== MAP SECTION (FIX #8) =====
