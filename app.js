@@ -217,8 +217,11 @@ function applyDateFilter(){
   const fromEl = document.getElementById('filterDateFrom');
   const toEl   = document.getElementById('filterDateTo');
   const lbl    = document.getElementById('filterDateLabel');
-  dateFilter.from = fromEl&&fromEl.value ? new Date(fromEl.value) : null;
-  dateFilter.to   = toEl&&toEl.value     ? new Date(toEl.value)   : null;
+  // Tambah T00:00:00 agar diparsing sebagai LOCAL midnight, bukan UTC
+  // new Date('2026-07-30') = UTC → di Jakarta (UTC+7) jadi jam 07:00 → tiket hari itu tidak muncul!
+  // new Date('2026-07-30T00:00:00') = LOCAL midnight → benar ✓
+  dateFilter.from = fromEl&&fromEl.value ? new Date(fromEl.value+'T00:00:00') : null;
+  dateFilter.to   = toEl&&toEl.value     ? new Date(toEl.value+'T00:00:00')   : null;
   // Label
   if(!dateFilter.from && !dateFilter.to){
     if(lbl) lbl.textContent = 'Semua Tanggal';
