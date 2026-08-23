@@ -6,8 +6,8 @@
    ========================================== */
 
 // ===== DATA SOURCE URLS =====
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1712613541&single=true&output=csv';
-const TAG_CSV_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1035358319&single=true&output=csv';
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkH2t9kqBO5dtSRWFJuDrDKtJ2s9zXJWWxz2Mv8usSLCY2VLQzmEdz3FTQAGOS-xMyYaUDenI7Gh5t/pub?gid=581336483&single=true&output=csv';
+const TAG_CSV_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkH2t9kqBO5dtSRWFJuDrDKtJ2s9zXJWWxz2Mv8usSLCY2VLQzmEdz3FTQAGOS-xMyYaUDenI7Gh5t/pub?gid=1035358319&single=true&output=csv';
 const MASTER_CSV_URL= 'https://willissmmf.github.io/SP_Dashboard/Master.csv';
     // Master.csv: same-origin fetch + simple parser (no CORS proxy, avoid hanging)
     const masterFetch=fetch(MASTER_CSV_URL+`?t=${Date.now()}`)
@@ -24,7 +24,7 @@ const MASTER_CSV_URL= 'https://willissmmf.github.io/SP_Dashboard/Master.csv';
         });
       }).catch(()=>[]);
 
-const DD_CSV_URL    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=408991878&single=true&output=csv';
+const DD_CSV_URL    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkH2t9kqBO5dtSRWFJuDrDKtJ2s9zXJWWxz2Mv8usSLCY2VLQzmEdz3FTQAGOS-xMyYaUDenI7Gh5t/pub?gid=408991878&single=true&output=csv';
 
 const CORS_PROXIES = [
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
