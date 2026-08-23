@@ -24,7 +24,7 @@ const MASTER_CSV_URL= 'https://willissmmf.github.io/SP_Dashboard/Master.csv';
         });
       }).catch(()=>[]);
 
-//const DD_CSV_URL    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkH2t9kqBO5dtSRWFJuDrDKtJ2s9zXJWWxz2Mv8usSLCY2VLQzmEdz3FTQAGOS-xMyYaUDenI7Gh5t/pub?gid=993436108&single=true&output=csv';
+const DD_CSV_URL    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkH2t9kqBO5dtSRWFJuDrDKtJ2s9zXJWWxz2Mv8usSLCY2VLQzmEdz3FTQAGOS-xMyYaUDenI7Gh5t/pub?gid=993436108&single=true&output=csv';
 
 const CORS_PROXIES = [
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
