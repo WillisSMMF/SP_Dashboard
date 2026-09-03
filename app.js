@@ -6,8 +6,8 @@
    ========================================== */
 
 // ===== DATA SOURCE URLS =====
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkH2t9kqBO5dtSRWFJuDrDKtJ2s9zXJWWxz2Mv8usSLCY2VLQzmEdz3FTQAGOS-xMyYaUDenI7Gh5t/pub?gid=734679691&single=true&output=csv';
-const TAG_CSV_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkH2t9kqBO5dtSRWFJuDrDKtJ2s9zXJWWxz2Mv8usSLCY2VLQzmEdz3FTQAGOS-xMyYaUDenI7Gh5t/pub?gid=581336483&single=true&output=csv';
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1712613541&single=true&output=csv';
+const TAG_CSV_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=1035358319&single=true&output=csv';
 const MASTER_CSV_URL= 'https://willissmmf.github.io/SP_Dashboard/Master.csv';
     // Master.csv: same-origin fetch + simple parser (no CORS proxy, avoid hanging)
     const masterFetch=fetch(MASTER_CSV_URL+`?t=${Date.now()}`)
@@ -24,7 +24,7 @@ const MASTER_CSV_URL= 'https://willissmmf.github.io/SP_Dashboard/Master.csv';
         });
       }).catch(()=>[]);
 
-const DD_CSV_URL    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkH2t9kqBO5dtSRWFJuDrDKtJ2s9zXJWWxz2Mv8usSLCY2VLQzmEdz3FTQAGOS-xMyYaUDenI7Gh5t/pub?gid=993436108&single=true&output=csv';
+const DD_CSV_URL    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxmI-osn5Oq2XBN8igHn5RpcxyFlhU7E02VtUgV3CLrLjrTiG09LfaC9jvXIpPUeQgGP22IW2eT5WZ/pub?gid=408991878&single=true&output=csv';
 
 const CORS_PROXIES = [
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
@@ -280,6 +280,11 @@ function applyGlobalFilters(){
     }
     if(product&&r['Product Source']!==product)return false;
     if(selBranches.length&&!selBranches.includes(branchField(r)))return false;
+    // Jika produk SimFast dipilih: hanya cabang yang sudah implement SimFast (Gel 0-3)
+    if(product==='SimFast'&&masterBranchMap.size>0){
+      const info=getMasterInfo(branchField(r));
+      if(!info||!info.hasSimfast)return false;
+    }
     return true;
   });
   filteredTagData=tagData.filter(r=>{
@@ -488,65 +493,73 @@ function renderTrendChart(){
     return parse(a)-parse(b);
   });
   const labels=sortedKeys;
-  const totalData=sortedKeys.map(k=>filteredData.filter(r=>getRowMonthKey(r)===k).length);
-  const mean=totalData.length?totalData.reduce((a,b)=>a+b,0)/totalData.length:0;
-  const meanData=totalData.map(()=>parseFloat(mean.toFixed(1)));
+  const byKey=k=>filteredData.filter(r=>getRowMonthKey(r)===k);
+  const peopleData =sortedKeys.map(k=>byKey(k).filter(r=>r['Root Cause']==='People').length);
+  const processData=sortedKeys.map(k=>byKey(k).filter(r=>r['Root Cause']==='Process').length);
+  const systemData =sortedKeys.map(k=>byKey(k).filter(r=>r['Root Cause']==='System').length);
+  const totalData  =sortedKeys.map((_,i)=>peopleData[i]+processData[i]+systemData[i]);
 
-  const pctPlugin={
-    id:'trendPct',
-    afterDraw(chart){
-      if(totalData.length<2)return;
-      const ctx=chart.ctx;
-      const meta=chart.getDatasetMeta(0);
-      totalData.forEach((val,i)=>{
-        if(i===0)return;
-        const prev=totalData[i-1]; if(!prev)return;
-        const pct=((val-prev)/prev*100).toFixed(1);
-        const sign=val>prev?'+':'';
-        const color=val>prev?'#f43f5e':val<prev?'#10b981':'#94a3b8';
-        const bar=meta.data[i]; if(!bar)return;
-        ctx.save();
-        ctx.font='bold 10px Inter,sans-serif';
-        ctx.fillStyle=color;
-        ctx.textAlign='center';
-        ctx.textBaseline='bottom';
-        ctx.fillText(`${sign}${pct}%`,bar.x,bar.y-3);
-        ctx.restore();
+  // Linear trend line (least squares regression)
+  const n=totalData.length;
+  const xMean=(n-1)/2;
+  const yMean=totalData.reduce((a,b)=>a+b,0)/n;
+  const slope=n<2?0:totalData.reduce((acc,y,x)=>acc+(x-xMean)*(y-yMean),0)/
+    totalData.reduce((acc,_,x)=>acc+(x-xMean)**2,0);
+  const intercept=yMean-slope*xMean;
+  const trendLine=totalData.map((_,x)=>Math.max(0,Math.round((slope*x+intercept)*10)/10));
+
+  // Inside-bar number labels
+  const insideLbl={id:'trendInsLbl',afterDraw(chart){
+    const ctx=chart.ctx;
+    chart.data.datasets.forEach((ds,di)=>{
+      if(ds.type==='line')return;
+      const meta=chart.getDatasetMeta(di);
+      meta.data.forEach((bar,i)=>{
+        const v=ds.data[i];if(!v||v<1)return;
+        const barH=Math.abs(bar.base-bar.y);if(barH<14)return;
+        ctx.save();ctx.font='bold 9px Inter,sans-serif';ctx.fillStyle='#f1f5f9';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(v,bar.x,bar.y+barH/2);ctx.restore();
       });
-    }
-  };
+    });
+  }};
 
   destroyChart('trend');
   const el=document.getElementById('trendChart');if(!el)return;
   charts.trend=new Chart(el.getContext('2d'),{
     type:'bar',
-    plugins:[pctPlugin],
+    plugins:[insideLbl],
     data:{labels,datasets:[
-      {label:'Total Tiket',data:totalData,backgroundColor:PALETTE.primary+'88',borderColor:PALETTE.primary,borderWidth:2,borderRadius:6,order:2},
-      {label:`Rata-rata (${mean.toFixed(1)})`,data:meanData,type:'line',borderColor:PALETTE.amber,backgroundColor:'transparent',borderWidth:2,borderDash:[7,4],tension:0,pointRadius:0,order:1}
+      {label:'People', data:peopleData, backgroundColor:RC_COLORS.People+'88', borderColor:RC_COLORS.People, borderWidth:1.5,borderRadius:4,stack:'s',order:3},
+      {label:'Process',data:processData,backgroundColor:RC_COLORS.Process+'88',borderColor:RC_COLORS.Process,borderWidth:1.5,borderRadius:4,stack:'s',order:4},
+      {label:'System', data:systemData, backgroundColor:RC_COLORS.System+'88', borderColor:RC_COLORS.System, borderWidth:1.5,borderRadius:4,stack:'s',order:5},
+      {label:'Trend',  data:trendLine,  type:'line',borderColor:PALETTE.amber,backgroundColor:'transparent',borderWidth:2.5,tension:0.4,pointRadius:3,pointBackgroundColor:PALETTE.amber,order:1}
     ]},
     options:{
       responsive:true,maintainAspectRatio:false,
-      layout:{padding:{top:28}},
+      layout:{padding:{top:8}},
       plugins:{
-        legend:{position:'top',labels:{padding:14}},
+        legend:{position:'top',labels:{padding:12,usePointStyle:true,font:{size:11}}},
         tooltip:{
           callbacks:{
-            afterBody(items){
+            title(items){return labels[items[0].dataIndex];},
+            beforeBody(items){
               const i=items[0].dataIndex;
+              const tot=totalData[i];
+              const p=peopleData[i],pr=processData[i],s=systemData[i];
+              const lines=[`Total: ${tot} | People: ${p} Process: ${pr} System: ${s}`];
               if(i>0&&totalData[i-1]){
-                const pct=((totalData[i]-totalData[i-1])/totalData[i-1]*100).toFixed(1);
-                const sign=totalData[i]>=totalData[i-1]?'+':'';
-                return[`Δ vs bulan lalu: ${sign}${pct}%`];
+                const pct=((tot-totalData[i-1])/totalData[i-1]*100).toFixed(1);
+                lines.push(`Δ vs bulan lalu: ${tot>=totalData[i-1]?'+':''}${pct}%`);
               }
-              return[];
+              return lines;
             }
           }
         }
       },
       scales:{
-        x:{grid:{display:false},ticks:{font:{size:10}}},
-        y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}
+        x:{stacked:true,grid:{display:false},ticks:{font:{size:10}}},
+        y:{stacked:true,beginAtZero:true,grid:{color:'rgba(255,255,255,0.04)'}}
       }
     }
   });
