@@ -499,15 +499,6 @@ function renderTrendChart(){
   const systemData =sortedKeys.map(k=>byKey(k).filter(r=>r['Root Cause']==='System').length);
   const totalData  =sortedKeys.map((_,i)=>peopleData[i]+processData[i]+systemData[i]);
 
-  // Linear trend line (least squares regression)
-  const n=totalData.length;
-  const xMean=(n-1)/2;
-  const yMean=totalData.reduce((a,b)=>a+b,0)/n;
-  const slope=n<2?0:totalData.reduce((acc,y,x)=>acc+(x-xMean)*(y-yMean),0)/
-    totalData.reduce((acc,_,x)=>acc+(x-xMean)**2,0);
-  const intercept=yMean-slope*xMean;
-  const trendLine=totalData.map((_,x)=>Math.max(0,Math.round((slope*x+intercept)*10)/10));
-
   // Inside-bar number labels
   const insideLbl={id:'trendInsLbl',afterDraw(chart){
     const ctx=chart.ctx;
@@ -532,8 +523,7 @@ function renderTrendChart(){
     data:{labels,datasets:[
       {label:'People', data:peopleData, backgroundColor:RC_COLORS.People+'88', borderColor:RC_COLORS.People, borderWidth:1.5,borderRadius:4,stack:'s',order:3},
       {label:'Process',data:processData,backgroundColor:RC_COLORS.Process+'88',borderColor:RC_COLORS.Process,borderWidth:1.5,borderRadius:4,stack:'s',order:4},
-      {label:'System', data:systemData, backgroundColor:RC_COLORS.System+'88', borderColor:RC_COLORS.System, borderWidth:1.5,borderRadius:4,stack:'s',order:5},
-      {label:'Trend',  data:trendLine,  type:'line',borderColor:PALETTE.amber,backgroundColor:'transparent',borderWidth:2.5,tension:0.4,pointRadius:3,pointBackgroundColor:PALETTE.amber,order:1}
+      {label:'System', data:systemData, backgroundColor:RC_COLORS.System+'88', borderColor:RC_COLORS.System, borderWidth:1.5,borderRadius:4,stack:'s',order:5}
     ]},
     options:{
       responsive:true,maintainAspectRatio:false,
@@ -1870,13 +1860,15 @@ let _katFilterCat=null, _katSortCol='total', _katSortDir='desc';
 function renderKategoriSection(){
   const sec=document.getElementById('section-kategori');
   if(!sec||!sec.classList.contains('active'))return;
-  const data=filteredData;
+  const data=_katGetFilteredDetailData();
   _renderKatKpi(data);
   _renderKatStackedChart(data);
   _renderKatRCPie(data);
   _renderKatTrend(data);
   _renderKatSummaryTable(data);
   _renderKatDetailTable(data);
+  // Build filter dropdowns only if HTML elements exist (new index.html)
+  if(document.getElementById('katCatList'))_katBuildDetailFilters(filteredData);
 }
 
 function _renderKatKpi(data){
@@ -1956,6 +1948,121 @@ function _renderKatSummaryTable(data){
 window._katClickRow=function(cat){_katFilterCat=_katFilterCat===cat?null:cat;const btn=document.getElementById('katClearFilter');if(btn)btn.style.display=_katFilterCat?'inline-flex':'none';_renderKatSummaryTable(filteredData);_renderKatDetailTable(filteredData);const card=document.getElementById('katDetailCard');if(card&&_katFilterCat)card.scrollIntoView({behavior:'smooth',block:'start'});};
 window._katClearFilter=function(){_katFilterCat=null;const btn=document.getElementById('katClearFilter');if(btn)btn.style.display='none';_renderKatSummaryTable(filteredData);_renderKatDetailTable(filteredData);};
 window._katExport=function(){const data=filteredData;const catMap={};data.forEach(r=>{const c=r.Category||'(Kosong)';if(!catMap[c])catMap[c]={total:0,people:0,system:0,process:0};catMap[c].total++;const rc=r['Root Cause']||'';if(rc==='People')catMap[c].people++;else if(rc==='System')catMap[c].system++;else if(rc==='Process')catMap[c].process++;});const rows=[['Kategori','Total','People','System','Process','% Total'],...Object.entries(catMap).sort((a,b)=>b[1].total-a[1].total).map(([c,v])=>[c,v.total,v.people,v.system,v.process,(v.total/data.length*100).toFixed(1)+'%'])];try{const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(rows);XLSX.utils.book_append_sheet(wb,ws,'Kategori');XLSX.writeFile(wb,'Kategori_Summary.xlsx');}catch(e){alert('Export gagal: '+e.message);}};
+
+// ── KATEGORI DETAIL FILTER STATE ──────────────────────────────────────
+let _katSelCats=new Set(); // empty = all
+let _katSelTags=new Set(); // empty = all
+
+function _katBuildDetailFilters(data){
+  // Build Kategori checklist
+  const cats=[...new Set(data.map(r=>r.Category||'(Kosong)'))].sort();
+  const catList=document.getElementById('katCatList');
+  if(catList){
+    catList.innerHTML=cats.map(c=>`
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0;font-size:0.82rem">
+        <input type="checkbox" class="katCatCb" value="${c.replace(/"/g,'&quot;')}" ${_katSelCats.size===0||_katSelCats.has(c)?'checked':''}>
+        <span>${c}</span>
+      </label>`).join('');
+    catList.querySelectorAll('.katCatCb').forEach(cb=>{
+      cb.onchange=()=>{
+        const checked=[...catList.querySelectorAll('.katCatCb:checked')].map(c=>c.value);
+        _katSelCats=checked.length===cats.length?new Set():new Set(checked);
+        const allCb=document.getElementById('katCatAllCb');
+        if(allCb)allCb.checked=_katSelCats.size===0;
+        _katUpdateDetailLabels();
+        _katApplyDetailFilters();
+      };
+    });
+  }
+  // Build Tag checklist
+  const allTags=[...new Set(tagData.filter(t=>data.some(r=>String(r.Id)===String(t.Id))).map(t=>t.Tag||'').filter(Boolean))].sort();
+  const tagList=document.getElementById('katTagList');
+  if(tagList) _katBuildTagList(allTags);
+}
+
+function _katBuildTagList(tags){
+  const tagList=document.getElementById('katTagList');if(!tagList)return;
+  tagList.innerHTML=tags.map(t=>`
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0;font-size:0.82rem">
+      <input type="checkbox" class="katTagCb" value="${t.replace(/"/g,'&quot;')}" ${_katSelTags.size===0||_katSelTags.has(t)?'checked':''}>
+      <span>${t}</span>
+    </label>`).join('');
+  tagList.querySelectorAll('.katTagCb').forEach(cb=>{
+    cb.onchange=()=>{
+      const allTags2=[...tagList.querySelectorAll('.katTagCb')].map(c=>c.value);
+      const checked=[...tagList.querySelectorAll('.katTagCb:checked')].map(c=>c.value);
+      _katSelTags=checked.length===allTags2.length?new Set():new Set(checked);
+      const allCb=document.getElementById('katTagAllCb');
+      if(allCb)allCb.checked=_katSelTags.size===0;
+      _katUpdateDetailLabels();
+      _katApplyDetailFilters();
+    };
+  });
+}
+
+window._katTagSearch=function(q){
+  const tagList=document.getElementById('katTagList');if(!tagList)return;
+  tagList.querySelectorAll('label').forEach(lbl=>{
+    const v=lbl.querySelector('input')?.value||'';
+    lbl.style.display=q&&!v.toLowerCase().includes(q.toLowerCase())?'none':'flex';
+  });
+};
+window._katCatToggleAll=function(checked){
+  document.querySelectorAll('.katCatCb').forEach(cb=>{cb.checked=checked;});
+  _katSelCats=new Set();
+  _katUpdateDetailLabels();
+  _katApplyDetailFilters();
+};
+window._katTagToggleAll=function(checked){
+  document.querySelectorAll('.katTagCb').forEach(cb=>{cb.checked=checked;});
+  _katSelTags=new Set();
+  _katUpdateDetailLabels();
+  _katApplyDetailFilters();
+};
+window._katDetailReset=function(){
+  _katSelCats=new Set();_katSelTags=new Set();
+  document.querySelectorAll('.katCatCb,.katTagCb').forEach(cb=>cb.checked=true);
+  const a1=document.getElementById('katCatAllCb');if(a1)a1.checked=true;
+  const a2=document.getElementById('katTagAllCb');if(a2)a2.checked=true;
+  _katUpdateDetailLabels();
+  _katApplyDetailFilters();
+};
+
+function _katUpdateDetailLabels(){
+  const catLbl=document.getElementById('katCatFilterLabel');
+  if(catLbl)catLbl.textContent=_katSelCats.size===0?'Semua Kategori':`${_katSelCats.size} Kategori`;
+  const tagLbl=document.getElementById('katTagFilterLabel');
+  if(tagLbl)tagLbl.textContent=_katSelTags.size===0?'Semua Tag':`${_katSelTags.size} Tag`;
+  const resetBtn=document.getElementById('katDetailResetBtn');
+  if(resetBtn)resetBtn.style.display=(_katSelCats.size>0||_katSelTags.size>0)?'inline-flex':'none';
+}
+
+function _katGetFilteredDetailData(){
+  let data=_katFilterCat?filteredData.filter(r=>(r.Category||'(Kosong)')===_katFilterCat):filteredData;
+  // Filter by selected categories
+  if(_katSelCats.size>0){
+    data=data.filter(r=>_katSelCats.has(r.Category||'(Kosong)'));
+  }
+  // Filter by selected tags
+  if(_katSelTags.size>0){
+    const matchIds=new Set(tagData.filter(t=>_katSelTags.has(t.Tag||'')).map(t=>String(t.Id)));
+    data=data.filter(r=>matchIds.has(String(r.Id)));
+  }
+  return data;
+}
+
+function _katApplyDetailFilters(){
+  const data=_katGetFilteredDetailData();
+  _renderKatDetailTable(data);
+  // Also update charts to reflect filtered data
+  _renderKatStackedChart(data);
+  _renderKatRCPie(data);
+  _renderKatTrend(data);
+  _renderKatSummaryTable(data);
+  // Update Tag section if active
+  const tagSec=document.getElementById('section-tags');
+  if(tagSec&&tagSec.classList.contains('active'))renderTagSection();
+}
 
 function _renderKatDetailTable(data){
   const tbody=document.getElementById('katDetailBody');const title=document.getElementById('katDetailTitle');if(!tbody)return;
@@ -2749,12 +2856,15 @@ window._sfClearDetailFilter=function(){
 function _renderSfGrowthTable(data){
   const el=document.getElementById('sfGrowthTableBody');if(!el)return;
   const keys=_sfGetMonthKeys(data);
-  if(!keys.length){el.innerHTML='<tr><td colspan="7" style="text-align:center;color:#64748b;padding:12px">Tidak ada data</td></tr>';return;}
+  if(!keys.length){el.innerHTML='<tr><td colspan="8" style="text-align:center;color:#64748b;padding:12px">Tidak ada data</td></tr>';return;}
+
+  // Pre-calculate monthlies for cumulative
+  const monthlies=keys.map(k=>data.filter(r=>getRowMonthKey(r)===k).length);
 
   el.innerHTML=keys.map((k,i)=>{
-    const kRows=data.filter(r=>getRowMonthKey(r)===k);
-    const total=kRows.length;
-    const prev=i>0?data.filter(r=>getRowMonthKey(r)===keys[i-1]).length:null;
+    const total=monthlies[i];
+    const prev=i>0?monthlies[i-1]:null;
+    const cumulative=monthlies.slice(0,i+1).reduce((a,b)=>a+b,0);
 
     // Growth vs prev month
     let growthHtml='<span style="color:#475569">–</span>';
@@ -2769,6 +2879,7 @@ function _renderSfGrowthTable(data){
     }
 
     // RC breakdown %
+    const kRows=data.filter(r=>getRowMonthKey(r)===k);
     const people=total>0?(kRows.filter(r=>r['Root Cause']==='People').length/total*100).toFixed(1):'0.0';
     const system=total>0?(kRows.filter(r=>r['Root Cause']==='System').length/total*100).toFixed(1):'0.0';
     const process=total>0?(kRows.filter(r=>r['Root Cause']==='Process').length/total*100).toFixed(1):'0.0';
@@ -2779,12 +2890,12 @@ function _renderSfGrowthTable(data){
     const monthEnd=yr&&mo>=0?new Date(yr,mo+1,0):null;
     const activeBr=(()=>{if(!monthEnd)return'—';const seen=new Set();return[...masterBranchMap.values()].filter(m=>{if(!m.hasSimfast||!m.implementDate||m.implementDate>monthEnd)return false;const k=canonBranch(m.branch);if(seen.has(k))return false;seen.add(k);return true;}).length;})();
 
-    const isNew=i===0;
     const bgStyle=total>0&&prev!==null&&total>prev?'background:rgba(244,63,94,0.05);':'';
     return`<tr style="${bgStyle}">
       <td style="padding:6px 10px;white-space:nowrap;font-weight:600">${k.replace(/^(\d{4}) /,'').slice(0,3)}'${parts[0].slice(2)}</td>
       <td style="text-align:right;padding:6px 8px;color:#94a3b8">${activeBr}</td>
       <td style="text-align:right;padding:6px 8px;font-weight:700;color:#f1f5f9">${total}</td>
+      <td style="text-align:right;padding:6px 8px;font-weight:700;color:#a5b4fc">${cumulative.toLocaleString()}</td>
       <td style="text-align:right;padding:6px 8px">${growthHtml}</td>
       <td style="text-align:right;padding:6px 8px;color:${SF_RC_COLORS.People}">${people}%</td>
       <td style="text-align:right;padding:6px 8px;color:${SF_RC_COLORS.System}">${system}%</td>
