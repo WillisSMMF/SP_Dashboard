@@ -681,7 +681,7 @@ function renderTicketTable(){
     // Gel column
     const prod=r['Product Source']||'';
     let gelHtml='<td style="text-align:center;color:#475569;font-size:0.76rem">—</td>';
-    if(prod==='SimFast'||prod==='Simascore'){
+    if(prod==='SimFast'||prod==='SimFast-2W'||prod==='Simascore'){
       const gel=r._sfGel!==undefined?r._sfGel:(getMasterInfo(branchField(r))?.gel??'?');
       gelHtml=`<td style="text-align:center"><span style="background:${PALETTE.primary}18;color:${PALETTE.primary};padding:2px 8px;border-radius:10px;font-size:0.74rem;font-weight:700;white-space:nowrap">Gel ${gel}</span></td>`;
     }
@@ -2174,8 +2174,8 @@ function getMasterInfo(branchName){
 function preprocessSimfastData(){
   allData.forEach(r=>{
     const prod=r['Product Source']||'';
-    // Hanya Product Source = "SimFast" yang dihitung
-    if(prod!=='SimFast'){r._sfActive=false;return;}
+    // Product Source = "SimFast" atau "SimFast-2W" yang dihitung
+    if(prod!=='SimFast'&&prod!=='SimFast-2W'){r._sfActive=false;return;}
     const issueDate=parseIssueDate(r['Date Submitted']);
     if(!issueDate){r._sfActive=false;return;}
     const info=getMasterInfo(branchField(r));
@@ -2528,7 +2528,7 @@ function _renderSfKpi(data){
   const e=id=>document.getElementById(id);
 
   // Hitung tiket SimFast yang di-exclude di periode ini
-  const allSFInPeriod=filteredData.filter(r=>r['Product Source']==='SimFast');
+  const allSFInPeriod=filteredData.filter(r=>r['Product Source']==='SimFast'||r['Product Source']==='SimFast-2W');
   const excluded=allSFInPeriod.filter(r=>!r._sfActive);
 
   if(e('sfKpiTotal')){
